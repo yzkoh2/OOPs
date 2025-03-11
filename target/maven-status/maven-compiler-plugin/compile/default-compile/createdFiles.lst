@@ -1,4 +1,12 @@
-com/editor/BackgroundEditor.class
-com/main/App.class
-com/gui/GUI.class
-com/main/Main.class
+com/main/components/BackgroundPanel.class
+com/entities/ExportSettings.class
+com/editor/ImageExporter.class
+com/editor/BackgroundRemover.class
+com/main/MainApplication.class
+com/main/components/AdjustmentPanel.class
+com/editor/ImageResizer.class
+com/util/ImageUtils.class
+com/main/components/SettingsPanel.class
+com/editor/ImageProcessor.class
+com/entities/Photo.class
+com/entities/BackgroundSettings.class
