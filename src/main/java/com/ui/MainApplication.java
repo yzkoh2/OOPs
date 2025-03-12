@@ -23,6 +23,8 @@ import java.awt.event.ActionEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.awt.image.BufferedImage;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.io.File;
 import java.util.concurrent.ExecutionException;
 
@@ -326,37 +328,178 @@ public class MainApplication {
         }
     }
     
-    private void handleCrop(ActionEvent e) {
-        if (currentPhoto == null) {
-            JOptionPane.showMessageDialog(
-                mainFrame,
-                "No image loaded.",
-                "Error",
-                JOptionPane.ERROR_MESSAGE
-            );
-            return;
-        }
-        
-        // Create a new frame for interactive cropping
-        CanvasFrame cropFrame = new CanvasFrame("Crop Image - Click and drag to select area");
-        cropFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-        
-        // Display the current image
-        cropFrame.showImage(currentPhoto.getProcessedFrame());
-        
-        // Add a MouseListener to handle cropping
-        // Note: In a real implementation, you would add mouse listeners and 
-        // handle interactive cropping. This is simplified for brevity.
-        
+private void handleCrop(ActionEvent e) {
+    if (currentPhoto == null) {
         JOptionPane.showMessageDialog(
             mainFrame,
-            "Interactive cropping would be implemented here.",
-            "Crop",
-            JOptionPane.INFORMATION_MESSAGE
+            "No image loaded.",
+            "Error",
+            JOptionPane.ERROR_MESSAGE
         );
-        
-        cropFrame.dispose();
+        return;
     }
+    
+    // Create a custom panel for interactive cropping
+    BufferedImage image = currentPhoto.getProcessedBufferedImage();
+    CropPanel cropPanel = new CropPanel(image);
+    
+    // Create a frame to hold the cropping panel
+    JFrame cropFrame = new JFrame("Crop Image - Click and drag to select area");
+    cropFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+    cropFrame.setLayout(new BorderLayout());
+    
+    // Add control buttons
+    JPanel buttonPanel = new JPanel();
+    JButton confirmButton = new JButton("Confirm Crop");
+    JButton cancelButton = new JButton("Cancel");
+    
+    buttonPanel.add(confirmButton);
+    buttonPanel.add(cancelButton);
+    
+    // Add components to frame
+    cropFrame.add(new JScrollPane(cropPanel), BorderLayout.CENTER);
+    cropFrame.add(buttonPanel, BorderLayout.SOUTH);
+    
+    // Set frame size and make visible
+    cropFrame.setSize(Math.min(image.getWidth() + 50, 800), 
+                      Math.min(image.getHeight() + 100, 600));
+    cropFrame.setLocationRelativeTo(mainFrame);
+    cropFrame.setVisible(true);
+    
+    // Handle confirm button click
+    confirmButton.addActionListener(confirmEvent -> {
+        Rectangle cropRect = cropPanel.getSelectionRectangle();
+        
+        if (cropRect != null && cropRect.width > 10 && cropRect.height > 10) {
+            statusLabel.setText("Cropping image...");
+            
+            // Use SwingWorker to process in background
+            SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>() {
+                @Override
+                protected Void doInBackground() throws Exception {
+                    // Convert Java Rectangle to OpenCV Rect
+                    Rect rect = new Rect(
+                        cropRect.x, 
+                        cropRect.y, 
+                        cropRect.width, 
+                        cropRect.height
+                    );
+                    
+                    // Create resizer with crop rectangle
+                    ImageResizer resizer = new ImageResizer(
+                        rect, 
+                        rect.width(), 
+                        rect.height(), 
+                        true
+                    );
+                    
+                    // Process the photo
+                    resizer.process(currentPhoto);
+                    return null;
+                }
+                
+                @Override
+                protected void done() {
+                    try {
+                        get(); // Check for exceptions
+                        updatePreview();
+                        statusLabel.setText("Image cropped successfully");
+                    } catch (Exception ex) {
+                        JOptionPane.showMessageDialog(
+                            mainFrame,
+                            "Error cropping image: " + ex.getMessage(),
+                            "Error",
+                            JOptionPane.ERROR_MESSAGE
+                        );
+                        statusLabel.setText("Failed to crop image");
+                    }
+                }
+            };
+            
+            worker.execute();
+            cropFrame.dispose();
+        } else {
+            JOptionPane.showMessageDialog(
+                cropFrame,
+                "Please select a valid crop area (minimum 10x10 pixels).",
+                "Invalid Selection",
+                JOptionPane.WARNING_MESSAGE
+            );
+        }
+    });
+    
+    // Handle cancel button click
+    cancelButton.addActionListener(cancelEvent -> cropFrame.dispose());
+}
+
+// Custom panel for interactive cropping
+private class CropPanel extends JPanel {
+    private BufferedImage image;
+    private Rectangle selectionRect;
+    private Point startPoint;
+
+    public CropPanel(BufferedImage image) {
+        this.image = image;
+        this.setPreferredSize(new Dimension(image.getWidth(), image.getHeight()));
+        
+        // Add mouse listeners for interactive selection
+        MouseAdapter mouseAdapter = new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                startPoint = e.getPoint();
+                selectionRect = null;
+                repaint();
+            }
+            
+            @Override
+            public void mouseDragged(MouseEvent e) {
+                if (startPoint != null) {
+                    int x = Math.min(startPoint.x, e.getX());
+                    int y = Math.min(startPoint.y, e.getY());
+                    int width = Math.abs(e.getX() - startPoint.x);
+                    int height = Math.abs(e.getY() - startPoint.y);
+                    
+                    selectionRect = new Rectangle(x, y, width, height);
+                    repaint();
+                }
+            }
+            
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                // Selection is complete when mouse is released
+            }
+        };
+        
+        addMouseListener(mouseAdapter);
+        addMouseMotionListener(mouseAdapter);
+    }
+    
+    @Override
+    protected void paintComponent(Graphics g) {
+        super.paintComponent(g);
+        
+        // Draw the image
+        g.drawImage(image, 0, 0, null);
+        
+        // Draw selection rectangle if it exists
+        if (selectionRect != null) {
+            Graphics2D g2d = (Graphics2D) g;
+            g2d.setColor(new Color(0, 120, 215, 128));
+            g2d.fillRect(selectionRect.x, selectionRect.y, 
+                        selectionRect.width, selectionRect.height);
+            
+            g2d.setColor(Color.BLUE);
+            g2d.setStroke(new BasicStroke(2));
+            g2d.drawRect(selectionRect.x, selectionRect.y, 
+                        selectionRect.width, selectionRect.height);
+        }
+    }
+    
+    public Rectangle getSelectionRectangle() {
+        return selectionRect;
+    }
+}
+
     
     private void handleRemoveBackground(ActionEvent e) {
         if (currentPhoto == null) {
