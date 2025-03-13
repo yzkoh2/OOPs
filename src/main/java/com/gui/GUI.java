@@ -82,7 +82,6 @@ public class GUI extends JFrame {
         JScrollPane scrollPane = new JScrollPane(imagePanel);
         add(scrollPane, BorderLayout.CENTER);
 
-        // Tools panel on the right (similar to JavaFX version)
         toolsPanel = createToolsPanel();
         add(toolsPanel, BorderLayout.EAST);
 
