@@ -1,16 +1,16 @@
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/entities/ExportSettings.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/main/App.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/editor/BackgroundRemover.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/main/Main.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/config/ApplicationConfig.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/util/ImageUtils.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/editor/ImageProcessor.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/util/FileUtils.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/util/Constants.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/gui/GUI.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/ui/MainApplication.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/editor/ImageExporter.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/editor/ImageResizer.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/entities/BackgroundSettings.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/entities/Photo.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/editor/BackgroundEditor.java
+/Users/garrisonk/Documents/GitHub/OOP/src/main/java/com/util/ImageUtils.java
+/Users/garrisonk/Documents/GitHub/OOP/src/main/java/com/editor/BackgroundEditor.java
+/Users/garrisonk/Documents/GitHub/OOP/src/main/java/com/ui/MainApplication.java
+/Users/garrisonk/Documents/GitHub/OOP/src/main/java/com/util/Constants.java
+/Users/garrisonk/Documents/GitHub/OOP/src/main/java/com/config/ApplicationConfig.java
+/Users/garrisonk/Documents/GitHub/OOP/src/main/java/com/entities/BackgroundSettings.java
+/Users/garrisonk/Documents/GitHub/OOP/src/main/java/com/main/App.java
+/Users/garrisonk/Documents/GitHub/OOP/src/main/java/com/main/Main.java
+/Users/garrisonk/Documents/GitHub/OOP/src/main/java/com/entities/Photo.java
+/Users/garrisonk/Documents/GitHub/OOP/src/main/java/com/gui/GUI.java
+/Users/garrisonk/Documents/GitHub/OOP/src/main/java/com/util/FileUtils.java
+/Users/garrisonk/Documents/GitHub/OOP/src/main/java/com/editor/BackgroundRemover.java
+/Users/garrisonk/Documents/GitHub/OOP/src/main/java/com/editor/ImageExporter.java
+/Users/garrisonk/Documents/GitHub/OOP/src/main/java/com/editor/ImageProcessor.java
+/Users/garrisonk/Documents/GitHub/OOP/src/main/java/com/entities/ExportSettings.java
+/Users/garrisonk/Documents/GitHub/OOP/src/main/java/com/editor/ImageResizer.java
