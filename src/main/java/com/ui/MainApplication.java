@@ -524,48 +524,214 @@ private class CropPanel extends JPanel {
     }
 }
 
-    
-    private void handleRemoveBackground(ActionEvent e) {
-        if (currentPhoto == null) {
-            JOptionPane.showMessageDialog(
-                mainFrame,
-                "No image loaded.",
-                "Error",
-                JOptionPane.ERROR_MESSAGE
-            );
-            return;
-        }
+// Selection panel specific for background removal
+// (You can reuse your CropPanel or create a specialized one)
+private class SelectionPanel extends JPanel {
+    private BufferedImage image;
+    private Rectangle selectionRect;
+    private Point startPoint;
+
+    public SelectionPanel(BufferedImage image) {
+        this.image = image;
+        this.setPreferredSize(new Dimension(image.getWidth(), image.getHeight()));
         
-        statusLabel.setText("Removing background...");
-        
-        SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>() {
+        // Add mouse listeners for interactive selection
+        MouseAdapter mouseAdapter = new MouseAdapter() {
             @Override
-            protected Void doInBackground() throws Exception {
-                BackgroundRemover remover = new BackgroundRemover(backgroundSettings);
-                remover.process(currentPhoto);
-                return null;
+            public void mousePressed(MouseEvent e) {
+                startPoint = e.getPoint();
+                selectionRect = null;
+                repaint();
             }
             
             @Override
-            protected void done() {
-                try {
-                    get(); // Check for exceptions
-                    updatePreview();
-                    statusLabel.setText("Background removed");
-                } catch (InterruptedException | ExecutionException ex) {
-                    JOptionPane.showMessageDialog(
-                        mainFrame,
-                        "Error removing background: " + ex.getMessage(),
-                        "Error",
-                        JOptionPane.ERROR_MESSAGE
-                    );
-                    statusLabel.setText("Failed to remove background");
+            public void mouseDragged(MouseEvent e) {
+                if (startPoint != null) {
+                    int x = Math.min(startPoint.x, e.getX());
+                    int y = Math.min(startPoint.y, e.getY());
+                    int width = Math.abs(e.getX() - startPoint.x);
+                    int height = Math.abs(e.getY() - startPoint.y);
+                    
+                    selectionRect = new Rectangle(x, y, width, height);
+                    repaint();
                 }
             }
         };
         
-        worker.execute();
+        addMouseListener(mouseAdapter);
+        addMouseMotionListener(mouseAdapter);
     }
+    
+    @Override
+    protected void paintComponent(Graphics g) {
+        super.paintComponent(g);
+        
+        // Draw the image
+        g.drawImage(image, 0, 0, null);
+        
+        // Draw selection rectangle if it exists
+        if (selectionRect != null) {
+            Graphics2D g2d = (Graphics2D) g;
+            // Use different color for background selection (red instead of blue)
+            g2d.setColor(new Color(215, 0, 0, 128));
+            g2d.fillRect(selectionRect.x, selectionRect.y, 
+                        selectionRect.width, selectionRect.height);
+            
+            g2d.setColor(Color.RED);
+            g2d.setStroke(new BasicStroke(2));
+            g2d.drawRect(selectionRect.x, selectionRect.y, 
+                        selectionRect.width, selectionRect.height);
+        }
+    }
+    
+    public Rectangle getSelectionRectangle() {
+        return selectionRect;
+    }
+}
+
+private void handleRemoveBackground(ActionEvent e) {
+    if (currentPhoto == null) {
+        JOptionPane.showMessageDialog(
+            mainFrame,
+            "No image loaded.",
+            "Error",
+            JOptionPane.ERROR_MESSAGE
+        );
+        return;
+    }
+    
+    // Create a custom panel for interactive selection
+    BufferedImage image = currentPhoto.getProcessedBufferedImage();
+    SelectionPanel selectionPanel = new SelectionPanel(image);
+    
+    // Create a frame to hold the selection panel
+    JFrame selectionFrame = new JFrame("Select Foreground - Click and drag to select area");
+    selectionFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+    selectionFrame.setLayout(new BorderLayout());
+    
+    // Add control buttons
+    JPanel buttonPanel = new JPanel();
+    JButton processButton = new JButton("Process Background Removal");
+    JButton cancelButton = new JButton("Cancel");
+    
+    buttonPanel.add(processButton);
+    buttonPanel.add(cancelButton);
+    
+    // Add components to frame
+    selectionFrame.add(new JScrollPane(selectionPanel), BorderLayout.CENTER);
+    selectionFrame.add(buttonPanel, BorderLayout.SOUTH);
+    
+    // Set frame size and make visible
+    selectionFrame.setSize(Math.min(image.getWidth() + 50, 800), 
+                          Math.min(image.getHeight() + 100, 600));
+    selectionFrame.setLocationRelativeTo(mainFrame);
+    selectionFrame.setVisible(true);
+    
+    // Handle process button click
+    processButton.addActionListener(processEvent -> {
+        Rectangle selectionRect = selectionPanel.getSelectionRectangle();
+        
+        if (selectionRect != null && selectionRect.width > 10 && selectionRect.height > 10) {
+            statusLabel.setText("Removing background...");
+            
+            // Use SwingWorker to process in background
+            SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>() {
+                @Override
+                protected Void doInBackground() throws Exception {
+                    // Convert Java Rectangle to OpenCV Rect
+                    Rect rect = new Rect(
+                        selectionRect.x, 
+                        selectionRect.y, 
+                        selectionRect.width, 
+                        selectionRect.height
+                    );
+                    
+                    // Create background remover with selection rectangle
+                    BackgroundRemover remover = new BackgroundRemover(backgroundSettings);
+                    remover.setSelectionRect(rect.x(), rect.y(), 
+                                            rect.x() + rect.width(),
+                                            rect.y() + rect.height());
+                    
+                    // Process the photo
+                    remover.process(currentPhoto);
+                    return null;
+                }
+                
+                @Override
+                protected void done() {
+                    try {
+                        get(); // Check for exceptions
+                        updatePreview();
+                        statusLabel.setText("Background removed successfully");
+                    } catch (Exception ex) {
+                        JOptionPane.showMessageDialog(
+                            mainFrame,
+                            "Error removing background: " + ex.getMessage(),
+                            "Error",
+                            JOptionPane.ERROR_MESSAGE
+                        );
+                        statusLabel.setText("Failed to remove background");
+                    }
+                }
+            };
+            
+            worker.execute();
+            selectionFrame.dispose();
+        } else {
+            JOptionPane.showMessageDialog(
+                selectionFrame,
+                "Please select a valid area (minimum 10x10 pixels).",
+                "Invalid Selection",
+                JOptionPane.WARNING_MESSAGE
+            );
+        }
+    });
+    
+    // Handle cancel button click
+    cancelButton.addActionListener(cancelEvent -> selectionFrame.dispose());
+}
+    
+    // private void handleRemoveBackground(ActionEvent e) {
+    //     if (currentPhoto == null) {
+    //         JOptionPane.showMessageDialog(
+    //             mainFrame,
+    //             "No image loaded.",
+    //             "Error",
+    //             JOptionPane.ERROR_MESSAGE
+    //         );
+    //         return;
+    //     }
+        
+    //     statusLabel.setText("Removing background...");
+        
+    //     SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>() {
+    //         @Override
+    //         protected Void doInBackground() throws Exception {
+    //             BackgroundRemover remover = new BackgroundRemover(backgroundSettings);
+    //             remover.process(currentPhoto);
+    //             return null;
+    //         }
+            
+    //         @Override
+    //         protected void done() {
+    //             try {
+    //                 get(); // Check for exceptions
+    //                 updatePreview();
+    //                 statusLabel.setText("Background removed");
+    //             } catch (InterruptedException | ExecutionException ex) {
+    //                 JOptionPane.showMessageDialog(
+    //                     mainFrame,
+    //                     "Error removing background: " + ex.getMessage(),
+    //                     "Error",
+    //                     JOptionPane.ERROR_MESSAGE
+    //                 );
+    //                 statusLabel.setText("Failed to remove background");
+    //             }
+    //         }
+    //     };
+        
+    //     worker.execute();
+    // }
     
     private void handleResize(ActionEvent e) {
         if (currentPhoto == null) {

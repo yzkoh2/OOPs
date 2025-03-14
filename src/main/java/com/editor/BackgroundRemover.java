@@ -1,40 +1,99 @@
 package com.editor;
 
 import com.entities.BackgroundSettings;
+import com.entities.Photo;
 import org.bytedeco.javacv.Frame;
+import org.bytedeco.javacv.Java2DFrameConverter;
 import org.bytedeco.javacv.OpenCVFrameConverter;
 import org.bytedeco.opencv.global.opencv_core;
 import org.bytedeco.opencv.global.opencv_imgproc;
 import org.bytedeco.opencv.opencv_core.*;
 
-
 import java.awt.Color;
+import java.awt.image.BufferedImage;
 
-import static org.bytedeco.opencv.global.opencv_imgproc.*;
+import static org.bytedeco.opencv.global.opencv_imgproc.GC_FGD;
+import static org.bytedeco.opencv.global.opencv_imgproc.GC_INIT_WITH_RECT;
+import static org.bytedeco.opencv.global.opencv_imgproc.GC_PR_FGD;
+import static org.bytedeco.opencv.global.opencv_imgproc.grabCut;
 
 public class BackgroundRemover implements ImageProcessor {
     private final BackgroundSettings settings;
     private final OpenCVFrameConverter.ToMat converter = new OpenCVFrameConverter.ToMat();
+    private final Java2DFrameConverter java2dConverter = new Java2DFrameConverter();
+    private Rect selectionRect = null;
 
     public BackgroundRemover(BackgroundSettings settings) {
         this.settings = settings;
     }
+    
+    /**
+     * Set the manually drawn selection rectangle
+     * @param startX X coordinate of starting point
+     * @param startY Y coordinate of starting point
+     * @param endX X coordinate of ending point
+     * @param endY Y coordinate of ending point
+     */
+    public void setSelectionRect(int startX, int startY, int endX, int endY) {
+        // Ensure correct rectangle even if drawn from bottom-right to top-left
+        int x = Math.min(startX, endX);
+        int y = Math.min(startY, endY);
+        int width = Math.abs(endX - startX);
+        int height = Math.abs(endY - startY);
+        
+        // Create the rectangle object
+        this.selectionRect = new Rect(x, y, width, height);
+    }
+    
+    /**
+     * Clear the selection rectangle
+     */
+    public void clearSelection() {
+        this.selectionRect = null;
+    }
+    
+    /**
+     * Check if a selection has been made
+     */
+    public boolean hasSelection() {
+        return this.selectionRect != null;
+    }
 
     @Override
+    public Photo process(Photo photo) {
+        // Get the processed frame directly instead of getting a BufferedImage
+        Frame frame = photo.getProcessedFrame().clone();
+        
+        // Process the frame using your existing process method
+        Frame processedFrame = process(frame);
+        
+        // Set the processed frame back to the photo
+        photo.setProcessedFrame(processedFrame);
+        
+        // Return the updated photo object
+        return photo;
+    }
+    
     public Frame process(Frame frame) {
         Mat image = converter.convert(frame);
         
         // Create mask for GrabCut
         Mat mask = new Mat(image.rows(), image.cols(), opencv_core.CV_8UC1, new org.bytedeco.opencv.opencv_core.Scalar(0));
         
-        // Define rectangle for GrabCut (slight margin from edges)
-        int margin = Math.min(image.rows(), image.cols()) / 10;
-        Rect rectangle = new Rect(
-            margin, 
-            margin, 
-            image.cols() - 2 * margin, 
-            image.rows() - 2 * margin
-        );
+        // Define rectangle for GrabCut - use manual selection if available, otherwise default
+        Rect rectangle;
+        if (selectionRect != null) {
+            rectangle = selectionRect;
+        } else {
+            // Fall back to automatic rectangle with margin
+            int margin = Math.min(image.rows(), image.cols()) / 10;
+            rectangle = new Rect(
+                margin, 
+                margin, 
+                image.cols() - 2 * margin, 
+                image.rows() - 2 * margin
+            );
+        }
         
         // Create temporary matrices for GrabCut algorithm
         Mat bgModel = new Mat();
