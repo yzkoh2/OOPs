@@ -5,9 +5,13 @@ com/config/ApplicationConfig.class
 com/ui/MainApplication$3.class
 com/util/ImageUtils.class
 com/gui/GUI.class
+com/editor/EraserTool$EraserPanel.class
+com/editor/EraserTool$EraserCompleteListener.class
 com/ui/MainApplication$5.class
 com/editor/ImageResizer.class
+com/editor/EraserTool$EraserPanel$2.class
 com/main/Main.class
+com/editor/EraserTool.class
 com/entities/Photo.class
 com/ui/MainApplication.class
 com/entities/BackgroundSettings.class
@@ -16,10 +20,13 @@ com/entities/ExportSettings$ImageFormat.class
 com/ui/MainApplication$4.class
 com/main/App.class
 com/ui/MainApplication$CropPanel$1.class
+com/ui/MainApplication$SelectionPanel$1.class
 com/ui/MainApplication$CropPanel.class
 com/editor/BackgroundEditor.class
 com/editor/BackgroundRemover.class
+com/ui/MainApplication$SelectionPanel.class
 com/ui/MainApplication$1.class
+com/editor/EraserTool$EraserPanel$1.class
 com/ui/MainApplication$6.class
 com/editor/ImageProcessor.class
 com/entities/BackgroundSettings$BackgroundType.class

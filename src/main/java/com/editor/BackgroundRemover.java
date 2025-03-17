@@ -1,21 +1,23 @@
 package com.editor;
 
-import com.entities.BackgroundSettings;
-import com.entities.Photo;
+import java.awt.Color;
+
 import org.bytedeco.javacv.Frame;
 import org.bytedeco.javacv.Java2DFrameConverter;
 import org.bytedeco.javacv.OpenCVFrameConverter;
 import org.bytedeco.opencv.global.opencv_core;
 import org.bytedeco.opencv.global.opencv_imgproc;
-import org.bytedeco.opencv.opencv_core.*;
-
-import java.awt.Color;
-import java.awt.image.BufferedImage;
-
 import static org.bytedeco.opencv.global.opencv_imgproc.GC_FGD;
 import static org.bytedeco.opencv.global.opencv_imgproc.GC_INIT_WITH_RECT;
 import static org.bytedeco.opencv.global.opencv_imgproc.GC_PR_FGD;
 import static org.bytedeco.opencv.global.opencv_imgproc.grabCut;
+import org.bytedeco.opencv.opencv_core.Mat;
+import org.bytedeco.opencv.opencv_core.Rect;
+import org.bytedeco.opencv.opencv_core.Scalar;
+import org.bytedeco.opencv.opencv_core.Size;
+
+import com.entities.BackgroundSettings;
+import com.entities.Photo;
 
 public class BackgroundRemover implements ImageProcessor {
     private final BackgroundSettings settings;
@@ -78,7 +80,13 @@ public class BackgroundRemover implements ImageProcessor {
         Mat image = converter.convert(frame);
         
         // Create mask for GrabCut
-        Mat mask = new Mat(image.rows(), image.cols(), opencv_core.CV_8UC1, new org.bytedeco.opencv.opencv_core.Scalar(0));
+        // Step 1: Properly Initialize mask as a Single-Channel Grayscale Image
+Mat mask = new Mat(image.rows(), image.cols(), opencv_core.CV_8UC1, new Scalar(opencv_imgproc.GC_BGD)); 
+
+
+
+
+
         
         // Define rectangle for GrabCut - use manual selection if available, otherwise default
         Rect rectangle;
@@ -98,7 +106,52 @@ public class BackgroundRemover implements ImageProcessor {
         // Create temporary matrices for GrabCut algorithm
         Mat bgModel = new Mat();
         Mat fgModel = new Mat();
-        
+
+        // Convert image to HSV color space
+Mat hsvImage = new Mat();
+opencv_imgproc.cvtColor(image, hsvImage, opencv_imgproc.COLOR_BGR2HSV);
+
+// Define skin and clothing color ranges (Modify for different lighting conditions)
+Scalar lowerSkin = new Scalar(0, 30, 60, 0);  
+Scalar upperSkin = new Scalar(20, 150, 255, 0);
+Scalar lowerClothes = new Scalar(0, 50, 50, 0); 
+Scalar upperClothes = new Scalar(180, 255, 255, 0);
+
+Mat lowerSkinMat = new Mat(1, 1, opencv_core.CV_8UC3, lowerSkin);
+    Mat upperSkinMat = new Mat(1, 1, opencv_core.CV_8UC3, upperSkin);
+    Mat lowerClothesMat = new Mat(1, 1, opencv_core.CV_8UC3, lowerClothes);
+    Mat upperClothesMat = new Mat(1, 1, opencv_core.CV_8UC3, upperClothes);
+
+// Create masks for skin and clothing
+Mat skinMask = new Mat();
+Mat clothesMask = new Mat();
+opencv_core.inRange(hsvImage, lowerSkinMat, upperSkinMat, skinMask);
+    opencv_core.inRange(hsvImage, lowerClothesMat, upperClothesMat, clothesMask);
+
+// Combine skin and clothing masks
+Mat combinedMask = new Mat();
+opencv_core.bitwise_or(skinMask, clothesMask, combinedMask);
+
+Mat kernel = opencv_imgproc.getStructuringElement(opencv_imgproc.MORPH_ELLIPSE, new Size(5, 5));
+    opencv_imgproc.dilate(combinedMask, combinedMask, kernel);
+
+            // Ensure probableFgMask is the same size and type as mask
+            Mat probableFgMask = new Mat(mask.size(), mask.type());
+            Mat whiteMat = new Mat(combinedMask.size(), combinedMask.type(), new Scalar(255)); // Mat filled with 255
+            opencv_core.compare(combinedMask, whiteMat, probableFgMask, opencv_core.CMP_EQ);
+
+            probableFgMask.convertTo(probableFgMask, opencv_core.CV_8UC1); // Convert to 8-bit
+
+// Step 2: Update the mask properly
+Mat fgMaskValue = new Mat(mask.size(), mask.type(), new Scalar(opencv_imgproc.GC_PR_FGD));
+fgMaskValue.copyTo(mask, probableFgMask);
+
+
+new Rect(image.cols() / 10, image.rows() / 10, image.cols() * 8 / 10, image.rows() * 8 / 10);
+
+            
+
+
         // Apply GrabCut algorithm
         grabCut(image, mask, rectangle, bgModel, fgModel, 
                 settings.getIterations(), GC_INIT_WITH_RECT);
