@@ -73,9 +73,13 @@ public class MainApplication {
     private BackgroundSettings backgroundSettings;
     private ExportSettings exportSettings;
 
+    
     // Main entry point
     public static void main(String[] args) {
         // Set system look and feel
+        System.out.println("Java Version: " + System.getProperty("java.version"));
+        System.out.println("OS Name: " + System.getProperty("os.name"));
+        System.out.println("OS Architecture: " + System.getProperty("os.arch"));
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         } catch (Exception e) {
@@ -253,6 +257,7 @@ public class MainApplication {
 
         return panel;
     }
+    
 
     // Update preview with current photo
     private void updatePreview() {
