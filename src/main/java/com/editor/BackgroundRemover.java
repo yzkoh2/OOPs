@@ -233,8 +233,20 @@ public class BackgroundRemover implements ImageProcessor {
      * @return Visualization frame
      */
     public Frame createMaskVisualization() {
-        if (originalImage == null || grabCutMask == null) {
-            throw new IllegalStateException("Must perform initial segmentation before visualization");
+        if (originalImage == null || originalImage.isNull()) {
+            // If no original image, return a blank frame or throw a more informative exception
+            System.err.println("Cannot create mask visualization: No original image available");
+            return new Frame(); // Or handle this more gracefully
+        }
+        
+        if (grabCutMask == null) {
+            // Perform initial segmentation if not already done
+            try {
+                performInitialSegmentation(new Frame()); // You might need to adjust this
+            } catch (Exception e) {
+                System.err.println("Failed to perform initial segmentation: " + e.getMessage());
+                return new Frame(); // Or handle this more gracefully
+            }
         }
        
         // Create a copy of the original image
@@ -353,16 +365,37 @@ public class BackgroundRemover implements ImageProcessor {
      * Clean up resources
      */
     public void release() {
-        if (grabCutMask != null) {
-            grabCutMask.release();
-        }
-        
-        if (originalImage != null) {
-            originalImage.release();
-        }
-        
-        if (initialResult != null) {
-            initialResult.release();
+        try {
+            if (grabCutMask != null) {
+                try {
+                    grabCutMask.release();
+                } catch (Exception e) {
+                    System.err.println("Error releasing grabCutMask: " + e.getMessage());
+                }
+                grabCutMask = null;
+            }
+            
+            if (originalImage != null && !originalImage.isNull()) {
+                try {
+                    originalImage.release();
+                } catch (Exception e) {
+                    System.err.println("Error releasing originalImage: " + e.getMessage());
+                }
+                originalImage = null;
+            }
+            
+            if (initialResult != null && !initialResult.isNull()) {
+                try {
+                    initialResult.release();
+                } catch (Exception e) {
+                    System.err.println("Error releasing initialResult: " + e.getMessage());
+                }
+                initialResult = null;
+            }
+        } catch (Exception e) {
+            System.err.println("Unexpected error during resource release: " + e.getMessage());
+        } finally {
+            System.gc();
         }
     }
 }

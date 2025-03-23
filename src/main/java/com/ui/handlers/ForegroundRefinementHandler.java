@@ -226,18 +226,30 @@ public class ForegroundRefinementHandler {
     private void finalizeRefinement() {
         try {
             updateStatus("Applying final background replacement...");
-
-            // Apply final mask
+    
+            // Make sure we have a valid backgroundRemover and photo
+            if (backgroundRemover == null) {
+                throw new IllegalStateException("Background remover is null");
+            }
+            if (currentPhoto == null) {
+                throw new IllegalStateException("Current photo is null");
+            }
+    
+            // Apply final mask - save result to a local variable first
             Photo processedPhoto = backgroundRemover.applyFinalMask(currentPhoto);
-
-            // Notify completion
+    
+            // Log success for debugging
+            System.out.println("Background removal process completed successfully");
+            
+            // Notify completion - with the processed photo
             notifyRefinementCompleted(processedPhoto);
             updateStatus("Background removal complete.");
-
+    
         } catch (Exception ex) {
+            ex.printStackTrace();
             handleRefinementError(ex);
         } finally {
-            // Cleanup resources
+            // Cleanup resources AFTER everything is done
             cleanup();
         }
     }
@@ -295,7 +307,22 @@ public class ForegroundRefinementHandler {
      */
     private void notifyRefinementCompleted(Photo processedPhoto) {
         if (callback != null) {
-            callback.onRefinementCompleted(processedPhoto);
+            try {
+                System.out.println("Notifying callback of refinement completion");
+                // Make sure we're passing the processed photo correctly
+                if (processedPhoto == null) {
+                    System.err.println("Warning: processedPhoto is null in notifyRefinementCompleted");
+                    // Use current photo as fallback
+                    callback.onRefinementCompleted(currentPhoto);
+                } else {
+                    callback.onRefinementCompleted(processedPhoto);
+                }
+            } catch (Exception e) {
+                System.err.println("Error in refinement completion callback: " + e.getMessage());
+                e.printStackTrace();
+            }
+        } else {
+            System.err.println("Warning: callback is null in notifyRefinementCompleted");
         }
     }
 
@@ -304,41 +331,38 @@ public class ForegroundRefinementHandler {
      * 
      * @param errorMessage Error message
      */
-    private void notifyRefinementFailed(String errorMessage) {
+
+     private void notifyRefinementFailed(String errorMessage) {
         if (callback != null) {
-            callback.onRefinementFailed(errorMessage);
+            try {
+                callback.onRefinementFailed(errorMessage);
+            } catch (Exception e) {
+                System.err.println("Error in refinement failure callback: " + e.getMessage());
+            }
         }
     }
-
     /**
      * Cleanup resources.
      */
     private void cleanup() {
-        // Release refinement panel
-        if (refinementPanel != null) {
-            refinementPanel.releaseResources();
-            refinementPanel = null;
-        }
-
-        // Dispose refinement dialog
+        // Cleanup dialog and UI resources
         if (refinementDialog != null) {
             refinementDialog.dispose();
             refinementDialog = null;
         }
-
-        // Release background remover
-        if (backgroundRemover != null) {
-            backgroundRemover.release();
-            backgroundRemover = null;
-        }
-
-        // Clear references
-        parentFrame = null;
-        statusLabel = null;
-        currentPhoto = null;
-        callback = null;
-
-        // Hint to garbage collector
-        System.gc();
+    
+        // Note: We're NOT releasing the backgroundRemover here
+        // because BackgroundRemovalHandler is responsible for that
+        // This prevents premature release of resources needed for mask application
+        
+        // Set references to null
+        visualizationFrame = null;
+        
+        // Don't clear these until we're sure we're done with the photo processing
+        // parentFrame = null;
+        // statusLabel = null;
+        // currentPhoto = null;
+        // callback = null;
+        // backgroundRemover = null;
     }
 }
