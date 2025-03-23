@@ -29,7 +29,21 @@ public class Photo {
         this.sourceFile = sourceFile;
         updateDimensions();
     }
-    
+    public Photo(Frame originalFrame) {
+        this.originalFrame = originalFrame;
+        this.processedFrame = originalFrame;
+    }
+
+    // Copy constructor
+    public Photo(Photo other) {
+        // Deep copy the frames
+        if (other.originalFrame != null) {
+            this.originalFrame = other.originalFrame.clone();
+        }
+        if (other.processedFrame != null) {
+            this.processedFrame = other.processedFrame.clone();
+        }
+    }
     private void updateDimensions() {
         if (processedFrame != null) {
             width = processedFrame.imageWidth;

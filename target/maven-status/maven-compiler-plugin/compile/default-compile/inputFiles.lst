@@ -1,17 +1,24 @@
-/Users/tas/Desktop/oop/OOPs/src/main/java/com/editor/EraserTool.java
-/Users/tas/Desktop/oop/OOPs/src/main/java/com/entities/ExportSettings.java
-/Users/tas/Desktop/oop/OOPs/src/main/java/com/editor/ImageResizer.java
-/Users/tas/Desktop/oop/OOPs/src/main/java/com/util/ImageUtils.java
-/Users/tas/Desktop/oop/OOPs/src/main/java/com/config/ApplicationConfig.java
-/Users/tas/Desktop/oop/OOPs/src/main/java/com/gui/GUI.java
-/Users/tas/Desktop/oop/OOPs/src/main/java/com/main/Main.java
-/Users/tas/Desktop/oop/OOPs/src/main/java/com/util/Constants.java
-/Users/tas/Desktop/oop/OOPs/src/main/java/com/editor/ImageProcessor.java
-/Users/tas/Desktop/oop/OOPs/src/main/java/com/entities/BackgroundSettings.java
-/Users/tas/Desktop/oop/OOPs/src/main/java/com/editor/BackgroundRemover.java
-/Users/tas/Desktop/oop/OOPs/src/main/java/com/util/FileUtils.java
-/Users/tas/Desktop/oop/OOPs/src/main/java/com/editor/BackgroundEditor.java
-/Users/tas/Desktop/oop/OOPs/src/main/java/com/ui/MainApplication.java
-/Users/tas/Desktop/oop/OOPs/src/main/java/com/main/App.java
-/Users/tas/Desktop/oop/OOPs/src/main/java/com/entities/Photo.java
-/Users/tas/Desktop/oop/OOPs/src/main/java/com/editor/ImageExporter.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\config\ApplicationConfig.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\ui\handlers\BackgroundRemovalHandler.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\ui\handlers\ImageSaveHandler.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\util\Constants.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\ui\handlers\ImageResizeHandler.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\ui\panels\SelectionPanel.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\entities\BackgroundSettings.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\ui\MainApplication.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\gui\GUI.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\editor\ImageResizer.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\entities\ExportSettings.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\entities\Photo.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\util\FileUtils.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\editor\EraserTool.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\main\App.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\ui\panels\CropPanel.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\util\ImageUtils.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\ui\handlers\ImageCropHandler.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\editor\ImageExporter.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\ui\handlers\ImageOpenHandler.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\editor\BackgroundEditor.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\editor\BackgroundRemover.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\main\Main.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\editor\ImageProcessor.java

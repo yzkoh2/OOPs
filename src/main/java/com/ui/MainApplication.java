@@ -50,29 +50,30 @@ import com.editor.ImageResizer;
 import com.entities.BackgroundSettings;
 import com.entities.ExportSettings;
 import com.entities.Photo;
+import com.ui.handlers.BackgroundRemovalHandler;
+import com.ui.handlers.ImageCropHandler;
+import com.ui.handlers.ImageOpenHandler;
+import com.ui.handlers.ImageResizeHandler;
+import com.ui.handlers.ImageSaveHandler;
 import com.util.Constants;
 import com.util.FileUtils;
-
-
+import com.util.ImageUtils;
 
 public class MainApplication {
-
-    // UI components
+    // UI Components
     private JFrame mainFrame;
-    private JFrame cropFrame;
     private JPanel mainPanel;
     private JLabel previewLabel;
     private JPanel controlPanel;
     private JPanel statusPanel;
     private JLabel statusLabel;
 
-    // Application state
+    // Application State
     private Photo currentPhoto;
     private BackgroundSettings backgroundSettings;
     private ExportSettings exportSettings;
-    private Rectangle cropRect;
-    private boolean isCropping = false;
 
+    // Main entry point
     public static void main(String[] args) {
         // Set system look and feel
         try {
@@ -86,6 +87,7 @@ public class MainApplication {
         });
     }
 
+    // Initialize the application
     private void initialize() {
         // Load configuration
         ApplicationConfig config = ApplicationConfig.getInstance();
@@ -134,6 +136,7 @@ public class MainApplication {
         mainFrame.setVisible(true);
     }
 
+    // Create preview panel
     private JPanel createPreviewPanel() {
         JPanel panel = new JPanel(new BorderLayout());
         panel.setBorder(BorderFactory.createTitledBorder(
@@ -161,6 +164,7 @@ public class MainApplication {
         return panel;
     }
 
+    // Create control panel with various action buttons
     private JPanel createControlPanel() {
         JPanel panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
@@ -250,623 +254,7 @@ public class MainApplication {
         return panel;
     }
 
-    private void handleOpenImage(ActionEvent e) {
-        JFileChooser fileChooser = new JFileChooser();
-        fileChooser.setDialogTitle("Open Image");
-        fileChooser.setFileFilter(new FileNameExtensionFilter(
-                "Image files", Constants.SUPPORTED_INPUT_FORMATS
-        ));
-
-        int result = fileChooser.showOpenDialog(mainFrame);
-
-        if (result == JFileChooser.APPROVE_OPTION) {
-            File selectedFile = fileChooser.getSelectedFile();
-            loadImage(selectedFile);
-        }
-    }
-
-    private void loadImage(File file) {
-        if (!FileUtils.isImageFile(file)) {
-            JOptionPane.showMessageDialog(
-                    mainFrame,
-                    "Selected file is not a supported image format.",
-                    "Invalid File",
-                    JOptionPane.ERROR_MESSAGE
-            );
-            return;
-        }
-
-        statusLabel.setText("Loading image...");
-
-        SwingWorker<Photo, Void> worker = new SwingWorker<Photo, Void>() {
-            @Override
-            protected Photo doInBackground() throws Exception {
-                return FileUtils.loadPhoto(file);
-            }
-
-            @Override
-            protected void done() {
-                try {
-                    currentPhoto = get();
-                    updatePreview();
-                    statusLabel.setText("Image loaded: " + file.getName());
-                } catch (InterruptedException | ExecutionException ex) {
-                    JOptionPane.showMessageDialog(
-                            mainFrame,
-                            "Error loading image: " + ex.getMessage(),
-                            "Error",
-                            JOptionPane.ERROR_MESSAGE
-                    );
-                    statusLabel.setText("Failed to load image");
-                }
-            }
-        };
-
-        worker.execute();
-    }
-
-    private void handleSaveImage(ActionEvent e) {
-        if (currentPhoto == null) {
-            JOptionPane.showMessageDialog(
-                    mainFrame,
-                    "No image loaded.",
-                    "Error",
-                    JOptionPane.ERROR_MESSAGE
-            );
-            return;
-        }
-
-        JFileChooser fileChooser = new JFileChooser();
-        fileChooser.setDialogTitle("Save Image");
-        fileChooser.setSelectedFile(new File(exportSettings.getFileNamePrefix() + "output."
-                + exportSettings.getFormat().getExtension()));
-
-        int result = fileChooser.showSaveDialog(mainFrame);
-
-        if (result == JFileChooser.APPROVE_OPTION) {
-            String outputPath = fileChooser.getSelectedFile().getAbsolutePath();
-            exportSettings.setOutputDirectory(fileChooser.getSelectedFile().getParent());
-
-            statusLabel.setText("Saving image...");
-
-            SwingWorker<File, Void> worker = new SwingWorker<File, Void>() {
-                @Override
-                protected File doInBackground() throws Exception {
-                    ImageExporter exporter = new ImageExporter(exportSettings);
-                    return exporter.export(currentPhoto, outputPath);
-                }
-
-                @Override
-                protected void done() {
-                    try {
-                        File savedFile = get();
-                        statusLabel.setText("Image saved to: " + savedFile.getAbsolutePath());
-                    } catch (InterruptedException | ExecutionException ex) {
-                        JOptionPane.showMessageDialog(
-                                mainFrame,
-                                "Error saving image: " + ex.getMessage(),
-                                "Error",
-                                JOptionPane.ERROR_MESSAGE
-                        );
-                        statusLabel.setText("Failed to save image");
-                    }
-                }
-            };
-
-            worker.execute();
-        }
-    }
-
-    private void handleCrop(ActionEvent e) {
-        if (currentPhoto == null) {
-            JOptionPane.showMessageDialog(
-                    mainFrame,
-                    "No image loaded.",
-                    "Error",
-                    JOptionPane.ERROR_MESSAGE
-            );
-            return;
-        }
-
-        // Create a custom panel for interactive cropping
-        BufferedImage image = currentPhoto.getProcessedBufferedImage();
-
-        // Use a predefined or dynamic maximum width and height for the crop panel
-        int maxWidth = 800;  // Max width for the panel
-        int maxHeight = 600; // Max height for the panel
-
-        // Calculate the scaling factor to maintain the aspect ratio
-        double aspectRatio = (double) image.getWidth() / image.getHeight();
-        int panelWidth = maxWidth;
-        int panelHeight = (int) (maxWidth / aspectRatio);
-
-        if (panelHeight > maxHeight) {
-            panelHeight = maxHeight;
-            panelWidth = (int) (maxHeight * aspectRatio);
-        }
-
-        // Scale the image to fit the crop panel, while maintaining the aspect ratio
-        Image scaledImage = image.getScaledInstance(panelWidth, panelHeight, Image.SCALE_SMOOTH);
-        BufferedImage resizedImage = new BufferedImage(panelWidth, panelHeight, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g2d = resizedImage.createGraphics();
-        g2d.drawImage(scaledImage, 0, 0, null);
-        g2d.dispose();
-
-        // Store the scaling factor for later use (used for mapping crop rectangle back to original image)
-        final double scaleX = (double) image.getWidth() / resizedImage.getWidth();
-        final double scaleY = (double) image.getHeight() / resizedImage.getHeight();
-
-        CropPanel cropPanel = new CropPanel(resizedImage);
-
-        // Create a frame to hold the cropping panel
-        JFrame cropFrame = new JFrame("Crop Image - Click and drag to select area");
-        cropFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-        cropFrame.setLayout(new BorderLayout());
-
-        // Add control buttons
-        JPanel buttonPanel = new JPanel();
-        JButton confirmButton = new JButton("Confirm Crop");
-        JButton cancelButton = new JButton("Cancel");
-
-        buttonPanel.add(confirmButton);
-        buttonPanel.add(cancelButton);
-
-        // Add components to frame
-        cropFrame.add(new JScrollPane(cropPanel), BorderLayout.CENTER);
-        cropFrame.add(buttonPanel, BorderLayout.SOUTH);
-
-        // Set frame size and make visible
-        cropFrame.setSize(Math.min(image.getWidth() + 50, 800),
-                Math.min(image.getHeight() + 100, 600));
-        cropFrame.setLocationRelativeTo(mainFrame);
-        cropFrame.setVisible(true);
-
-        // Handle confirm button click
-        confirmButton.addActionListener(confirmEvent -> {
-            Rectangle cropRect = cropPanel.getSelectionRectangle();
-            System.out.println("Crop Area: " + cropRect);
-
-            if (cropRect != null && cropRect.width > 10 && cropRect.height > 10) {
-                // Map the crop area back to the original image size
-                int originalX = (int) (cropRect.x * scaleX);
-                int originalY = (int) (cropRect.y * scaleY);
-                int originalWidth = (int) (cropRect.width * scaleX);
-                int originalHeight = (int) (cropRect.height * scaleY);
-
-                Rectangle originalRect = new Rectangle(originalX, originalY, originalWidth, originalHeight);
-
-                statusLabel.setText("Cropping image...");
-
-                // Use SwingWorker to process in background
-                SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>() {
-                    @Override
-                    protected Void doInBackground() throws Exception {
-                        Rect rect = new Rect(originalRect.x, originalRect.y, originalRect.width, originalRect.height);
-
-                        // Create resizer with crop rectangle
-                        ImageResizer resizer = new ImageResizer(
-                                rect,
-                                rect.width(),
-                                rect.height(),
-                                true
-                        );
-
-                        // Process the photo
-                        resizer.process(currentPhoto);
-                        return null;
-                    }
-
-                    @Override
-                    protected void done() {
-                        try {
-                            get(); // Check for exceptions
-                            updatePreview();
-                            statusLabel.setText("Image cropped successfully");
-                        } catch (Exception ex) {
-                            JOptionPane.showMessageDialog(
-                                    mainFrame,
-                                    "Error cropping image: " + ex.getMessage(),
-                                    "Error",
-                                    JOptionPane.ERROR_MESSAGE
-                            );
-                            statusLabel.setText("Failed to crop image");
-                        }
-                    }
-                };
-
-                worker.execute();
-                cropFrame.dispose();
-            } else {
-                JOptionPane.showMessageDialog(
-                        cropFrame,
-                        "Please select a valid crop area (minimum 10x10 pixels).",
-                        "Invalid Selection",
-                        JOptionPane.WARNING_MESSAGE
-                );
-            }
-        });
-
-        // Handle cancel button click
-        cancelButton.addActionListener(cancelEvent -> cropFrame.dispose());
-    }
-
-// Custom panel for interactive cropping
-    private class CropPanel extends JPanel {
-
-        private BufferedImage image;
-        private Rectangle selectionRect;
-        private Point startPoint;
-
-        public CropPanel(BufferedImage image) {
-            this.image = image;
-            this.setPreferredSize(new Dimension(image.getWidth(), image.getHeight()));
-
-            // Add mouse listeners for interactive selection
-            MouseAdapter mouseAdapter = new MouseAdapter() {
-                @Override
-                public void mousePressed(MouseEvent e) {
-                    startPoint = e.getPoint();
-                    selectionRect = null;
-                    repaint();
-                }
-
-                @Override
-                public void mouseDragged(MouseEvent e) {
-                    if (startPoint != null) {
-                        int x = Math.min(startPoint.x, e.getX());
-                        int y = Math.min(startPoint.y, e.getY());
-                        int width = Math.abs(e.getX() - startPoint.x);
-                        int height = Math.abs(e.getY() - startPoint.y);
-
-                        selectionRect = new Rectangle(x, y, width, height);
-                        repaint();
-                    }
-                }
-
-                @Override
-                public void mouseReleased(MouseEvent e) {
-                    // Selection is complete when mouse is released
-                }
-            };
-
-            addMouseListener(mouseAdapter);
-            addMouseMotionListener(mouseAdapter);
-        }
-
-        @Override
-        protected void paintComponent(Graphics g) {
-            super.paintComponent(g);
-
-            // Draw the image
-            g.drawImage(image, 0, 0, null);
-
-            // Draw selection rectangle if it exists
-            if (selectionRect != null) {
-                Graphics2D g2d = (Graphics2D) g;
-                g2d.setColor(new Color(0, 120, 215, 128));
-                g2d.fillRect(selectionRect.x, selectionRect.y,
-                        selectionRect.width, selectionRect.height);
-
-                g2d.setColor(Color.BLUE);
-                g2d.setStroke(new BasicStroke(2));
-                g2d.drawRect(selectionRect.x, selectionRect.y,
-                        selectionRect.width, selectionRect.height);
-            }
-        }
-
-        public Rectangle getSelectionRectangle() {
-            return selectionRect;
-        }
-    }
-
-// Selection panel specific for background removal
-// (You can reuse your CropPanel or create a specialized one)
-    private class SelectionPanel extends JPanel {
-
-        private BufferedImage image;
-        private Rectangle selectionRect;
-        private Point startPoint;
-
-        public SelectionPanel(BufferedImage image, MainApplication app) {
-            this.image = image;
-            this.setPreferredSize(new Dimension(image.getWidth(), image.getHeight()));
-
-            // Add mouse listeners for interactive selection
-            MouseAdapter mouseAdapter = new MouseAdapter() {
-                @Override
-                public void mousePressed(MouseEvent e) {
-                    startPoint = e.getPoint();
-                    selectionRect = null;
-                    repaint();
-                }
-
-                @Override
-                public void mouseDragged(MouseEvent e) {
-                    if (startPoint != null) {
-                        int x = Math.min(startPoint.x, e.getX());
-                        int y = Math.min(startPoint.y, e.getY());
-                        int width = Math.abs(e.getX() - startPoint.x);
-                        int height = Math.abs(e.getY() - startPoint.y);
-
-                        selectionRect = new Rectangle(x, y, width, height);
-                        repaint();
-                    }
-                }
-            };
-
-            addMouseListener(mouseAdapter);
-            addMouseMotionListener(mouseAdapter);
-        }
-
-        @Override
-        protected void paintComponent(Graphics g) {
-            super.paintComponent(g);
-
-            // Draw the image
-            g.drawImage(image, 0, 0, null);
-
-            // Draw selection rectangle if it exists
-            if (selectionRect != null) {
-                Graphics2D g2d = (Graphics2D) g;
-                // Use different color for background selection (red instead of blue)
-                g2d.setColor(new Color(215, 0, 0, 128));
-                g2d.fillRect(selectionRect.x, selectionRect.y,
-                        selectionRect.width, selectionRect.height);
-
-                g2d.setColor(Color.RED);
-                g2d.setStroke(new BasicStroke(2));
-                g2d.drawRect(selectionRect.x, selectionRect.y,
-                        selectionRect.width, selectionRect.height);
-            }
-        }
-
-        public Rectangle getSelectionRectangle() {
-            return selectionRect;
-        }
-    }
-
-    private void handleRemoveBackground(ActionEvent e) {
-        if (currentPhoto == null) {
-            JOptionPane.showMessageDialog(
-                    mainFrame,
-                    "No image loaded.",
-                    "Error",
-                    JOptionPane.ERROR_MESSAGE
-            );
-            return;
-        }
-
-        // Create a custom panel for interactive selection
-        BufferedImage image = currentPhoto.getProcessedBufferedImage();
-
-        // Use a predefined or dynamic maximum width and height for the selection panel
-        int maxWidth = 800;  // Max width for the panel
-        int maxHeight = 600; // Max height for the panel
-
-        // Calculate the scaling factor to maintain the aspect ratio
-        double aspectRatio = (double) image.getWidth() / image.getHeight();
-        int panelWidth = maxWidth;
-        int panelHeight = (int) (maxWidth / aspectRatio);
-
-        if (panelHeight > maxHeight) {
-            panelHeight = maxHeight;
-            panelWidth = (int) (maxHeight * aspectRatio);
-        }
-
-        // Scale the image to fit the selection panel, while maintaining the aspect ratio
-        Image scaledImage = image.getScaledInstance(panelWidth, panelHeight, Image.SCALE_SMOOTH);
-        BufferedImage resizedImage = new BufferedImage(panelWidth, panelHeight, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g2d = resizedImage.createGraphics();
-        g2d.drawImage(scaledImage, 0, 0, null);
-        g2d.dispose();
-
-        // Store the scaling factor for later use (used for mapping selection rectangle back to original image)
-        final double scaleX = (double) image.getWidth() / resizedImage.getWidth();
-        final double scaleY = (double) image.getHeight() / resizedImage.getHeight();
-
-        SelectionPanel selectionPanel = new SelectionPanel(resizedImage, this);
-
-        // Create a frame to hold the selection panel
-        JFrame selectionFrame = new JFrame("Select Foreground - Click and drag to select area");
-        selectionFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-        selectionFrame.setLayout(new BorderLayout());
-
-        // Add control buttons
-        JPanel buttonPanel = new JPanel();
-        JButton processButton = new JButton("Process Background Removal");
-        JButton cancelButton = new JButton("Cancel");
-
-        buttonPanel.add(processButton);
-        buttonPanel.add(cancelButton);
-
-        // Add components to frame
-        selectionFrame.add(new JScrollPane(selectionPanel), BorderLayout.CENTER);
-        selectionFrame.add(buttonPanel, BorderLayout.SOUTH);
-
-        // Set frame size and make visible
-        selectionFrame.setSize(Math.min(image.getWidth() + 50, 800),
-                Math.min(image.getHeight() + 100, 600));
-        selectionFrame.setLocationRelativeTo(mainFrame);
-        selectionFrame.setVisible(true);
-
-        // Handle process button click
-        processButton.addActionListener(processEvent -> {
-            Rectangle selectionRect = selectionPanel.getSelectionRectangle();
-
-            if (selectionRect != null && selectionRect.width > 10 && selectionRect.height > 10) {
-                statusLabel.setText("Removing background...");
-
-                // Use SwingWorker to process in background
-                SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>() {
-                    @Override
-                    protected Void doInBackground() throws Exception {
-                        // Convert Java Rectangle to OpenCV Rect
-                        // Scale the selection area back to the original image coordinates
-                        int originalX = (int) (selectionRect.x * scaleX);
-                        int originalY = (int) (selectionRect.y * scaleY);
-                        int originalWidth = (int) (selectionRect.width * scaleX);
-                        int originalHeight = (int) (selectionRect.height * scaleY);
-
-                        // Create OpenCV Rect using the scaled coordinates
-                        Rect rect = new Rect(originalX, originalY, originalWidth, originalHeight);
-
-                        // Create background remover with selection rectangle
-                        BackgroundRemover remover = new BackgroundRemover(backgroundSettings);
-                        remover.setSelectionRect(rect.x(), rect.y(),
-                                rect.x() + rect.width(),
-                                rect.y() + rect.height());
-
-                        // Process the photo
-                        remover.process(currentPhoto);
-                        return null;
-                    }
-
-                    @Override
-                    protected void done() {
-                        try {
-                            get(); // Check for exceptions
-                            updatePreview();
-                            statusLabel.setText("Background removed successfully");
-                        } catch (Exception ex) {
-                            JOptionPane.showMessageDialog(
-                                    mainFrame,
-                                    "Error removing background: " + ex.getMessage(),
-                                    "Error",
-                                    JOptionPane.ERROR_MESSAGE
-                            );
-                            statusLabel.setText("Failed to remove background");
-                        }
-                    }
-                };
-
-                worker.execute();
-                selectionFrame.dispose();
-            } else {
-                JOptionPane.showMessageDialog(
-                        selectionFrame,
-                        "Please select a valid area (minimum 10x10 pixels).",
-                        "Invalid Selection",
-                        JOptionPane.WARNING_MESSAGE
-                );
-            }
-        });
-
-        // Handle cancel button click
-        cancelButton.addActionListener(cancelEvent -> selectionFrame.dispose());
-    }
-
-    // private void handleRemoveBackground(ActionEvent e) {
-    //     if (currentPhoto == null) {
-    //         JOptionPane.showMessageDialog(
-    //             mainFrame,
-    //             "No image loaded.",
-    //             "Error",
-    //             JOptionPane.ERROR_MESSAGE
-    //         );
-    //         return;
-    //     }
-    //     statusLabel.setText("Removing background...");
-    //     SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>() {
-    //         @Override
-    //         protected Void doInBackground() throws Exception {
-    //             BackgroundRemover remover = new BackgroundRemover(backgroundSettings);
-    //             remover.process(currentPhoto);
-    //             return null;
-    //         }
-    //         @Override
-    //         protected void done() {
-    //             try {
-    //                 get(); // Check for exceptions
-    //                 updatePreview();
-    //                 statusLabel.setText("Background removed");
-    //             } catch (InterruptedException | ExecutionException ex) {
-    //                 JOptionPane.showMessageDialog(
-    //                     mainFrame,
-    //                     "Error removing background: " + ex.getMessage(),
-    //                     "Error",
-    //                     JOptionPane.ERROR_MESSAGE
-    //                 );
-    //                 statusLabel.setText("Failed to remove background");
-    //             }
-    //         }
-    //     };
-    //     worker.execute();
-    // }
-    private void handleResize(ActionEvent e) {
-        if (currentPhoto == null) {
-            JOptionPane.showMessageDialog(
-                    mainFrame,
-                    "No image loaded.",
-                    "Error",
-                    JOptionPane.ERROR_MESSAGE
-            );
-            return;
-        }
-
-        statusLabel.setText("Resizing image...");
-
-        SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>() {
-            @Override
-            protected Void doInBackground() throws Exception {
-                // Get dimensions from config 
-                ApplicationConfig config = ApplicationConfig.getInstance();
-                int widthMm = config.getIntProperty("photo.width.mm", Constants.PASSPORT_PHOTO_WIDTH_MM);
-                int heightMm = config.getIntProperty("photo.height.mm", Constants.PASSPORT_PHOTO_HEIGHT_MM);
-                int dpi = config.getIntProperty("photo.dpi", 300);
-
-                // Calculate dimensions in pixels
-                int pixelsPerMm = dpi / 25; // 25.4mm per inch, simplified to 25
-                int widthPx = widthMm * pixelsPerMm;
-                int heightPx = heightMm * pixelsPerMm;
-
-                Frame photoFrame = currentPhoto.getProcessedFrame();
-                ImageResizer resizer = new ImageResizer(widthPx, heightPx, true);
-                Frame resizedFrame = resizer.resizeToIDPhotoSize(photoFrame);
-            
-                // Update currentPhoto with the resized frame
-                currentPhoto.setProcessedFrame(resizedFrame);
-                return null;
-            }
-
-            @Override
-            protected void done() {
-                try {
-                    get(); // Check for exceptions
-                    updatePreview();
-                    statusLabel.setText("Image resized to ID photo dimensions");
-                } catch (InterruptedException | ExecutionException ex) {
-                    JOptionPane.showMessageDialog(
-                            mainFrame,
-                            "Error resizing image: " + ex.getMessage(),
-                            "Error",
-                            JOptionPane.ERROR_MESSAGE
-                    );
-                    statusLabel.setText("Failed to resize image");
-                }
-            }
-        };
-
-        worker.execute();
-    }
-
-    private void handleChooseBackgroundColor(ActionEvent e) {
-        Color initialColor = backgroundSettings.getBackgroundColor();
-        Color selectedColor = JColorChooser.showDialog(
-                mainFrame,
-                "Choose Background Color",
-                initialColor
-        );
-
-        if (selectedColor != null) {
-            backgroundSettings.setBackgroundColor(selectedColor);
-
-            // If we have an image and already removed background, apply the new color
-            if (currentPhoto != null) {
-                handleRemoveBackground(e);
-            }
-        }
-    }
-
+    // Update preview with current photo
     private void updatePreview() {
         if (currentPhoto != null) {
             BufferedImage image = currentPhoto.getProcessedBufferedImage();
@@ -899,6 +287,230 @@ public class MainApplication {
         } else {
             previewLabel.setIcon(null);
             previewLabel.setText("No image loaded");
+        }
+    }
+
+    // Placeholder methods for event handlers (to be implemented in next iterations)
+    private void handleOpenImage(ActionEvent e) {
+        ImageOpenHandler openHandler = new ImageOpenHandler(
+            mainFrame, 
+            statusLabel, 
+            new ImageOpenHandler.ImageOpenCallback() {
+                @Override
+                public void onImageLoaded(Photo photo) {
+                    // Update the current photo
+                    currentPhoto = photo;
+                    
+                    // Update the preview
+                    updatePreview();
+                }
+
+                @Override
+                public void onImageLoadFailed(String errorMessage) {
+                    // Show error message to user
+                    JOptionPane.showMessageDialog(
+                        mainFrame,
+                        errorMessage,
+                        "Image Load Error",
+                        JOptionPane.ERROR_MESSAGE
+                    );
+                    
+                    // Clear the current photo
+                    currentPhoto = null;
+                    updatePreview();
+                }
+            }
+        );
+
+        // Delegate image opening to the handler
+        openHandler.handleOpenImage(e);
+    }
+
+    // Updated method to handle image saving
+    private void handleSaveImage(ActionEvent e) {
+        // Check if an image is loaded
+        if (currentPhoto == null) {
+            JOptionPane.showMessageDialog(
+                mainFrame,
+                "No image loaded.",
+                "Error",
+                JOptionPane.ERROR_MESSAGE
+            );
+            return;
+        }
+
+        ImageSaveHandler saveHandler = new ImageSaveHandler(
+            mainFrame, 
+            statusLabel, 
+            currentPhoto, 
+            exportSettings,
+            new ImageSaveHandler.ImageSaveCallback() {
+                @Override
+                public void onImageSaveStarted() {
+                    // Optional: Disable save button or show loading indicator
+                }
+
+                @Override
+                public void onImageSaved(File savedFile) {
+                    // Optional: Refresh UI or show success message
+                    JOptionPane.showMessageDialog(
+                        mainFrame,
+                        "Image saved successfully: " + savedFile.getAbsolutePath(),
+                        "Save Successful",
+                        JOptionPane.INFORMATION_MESSAGE
+                    );
+                }
+
+                @Override
+                public void onImageSaveFailed(String errorMessage) {
+                    // Error handling is already done in the handler
+                }
+            }
+        );
+
+        // Delegate image saving to the handler
+        saveHandler.handleSaveImage(e);
+    }
+
+    // Updated method to handle background removal
+    private void handleRemoveBackground(ActionEvent e) {
+        // Check if an image is loaded
+        if (currentPhoto == null) {
+            JOptionPane.showMessageDialog(
+                mainFrame,
+                "No image loaded.",
+                "Error",
+                JOptionPane.ERROR_MESSAGE
+            );
+            return;
+        }
+
+        BackgroundRemovalHandler bgRemovalHandler = new BackgroundRemovalHandler(
+            mainFrame, 
+            statusLabel, 
+            currentPhoto, 
+            backgroundSettings,
+            new BackgroundRemovalHandler.BackgroundRemovalCallback() {
+                @Override
+                public void onBackgroundRemovalStarted() {
+                    // Optional: Show loading state
+                }
+
+                @Override
+                public void onBackgroundRemovalCompleted(Photo processedPhoto) {
+                    // Update current photo and preview
+                    currentPhoto = processedPhoto;
+                    updatePreview();
+                }
+
+                @Override
+                public void onBackgroundRemovalFailed(String errorMessage) {
+                    // Error handling is already done in the handler
+                }
+            }
+        );
+
+        // Delegate background removal to the handler
+        bgRemovalHandler.handleRemoveBackground(e);
+    }
+
+    // Updated method to handle image resizing
+    private void handleResize(ActionEvent e) {
+        // Check if an image is loaded
+        if (currentPhoto == null) {
+            JOptionPane.showMessageDialog(
+                mainFrame,
+                "No image loaded.",
+                "Error",
+                JOptionPane.ERROR_MESSAGE
+            );
+            return;
+        }
+
+        ImageResizeHandler resizeHandler = new ImageResizeHandler(
+            mainFrame, 
+            statusLabel, 
+            currentPhoto,
+            new ImageResizeHandler.ImageResizeCallback() {
+                @Override
+                public void onResizeStarted() {
+                    // Optional: Show loading state
+                }
+
+                @Override
+                public void onResizeCompleted(Photo resizedPhoto) {
+                    // Update current photo and preview
+                    currentPhoto = resizedPhoto;
+                    updatePreview();
+                }
+
+                @Override
+                public void onResizeFailed(String errorMessage) {
+                    // Error handling is already done in the handler
+                }
+            }
+        );
+
+        // Delegate resizing to the handler
+        resizeHandler.handleResize(e);
+    }
+
+    // Updated method to handle image cropping
+    private void handleCrop(ActionEvent e) {
+        // Check if an image is loaded
+        if (currentPhoto == null) {
+            JOptionPane.showMessageDialog(
+                mainFrame,
+                "No image loaded.",
+                "Error",
+                JOptionPane.ERROR_MESSAGE
+            );
+            return;
+        }
+
+        ImageCropHandler cropHandler = new ImageCropHandler(
+            mainFrame, 
+            statusLabel, 
+            currentPhoto,
+            new ImageCropHandler.ImageCropCallback() {
+                @Override
+                public void onCropStarted() {
+                    // Optional: Show loading state
+                }
+
+                @Override
+                public void onCropCompleted(Photo croppedPhoto) {
+                    // Update current photo and preview
+                    currentPhoto = croppedPhoto;
+                    updatePreview();
+                }
+
+                @Override
+                public void onCropFailed(String errorMessage) {
+                    // Error handling is already done in the handler
+                }
+            }
+        );
+
+        // Delegate cropping to the handler
+        cropHandler.handleCrop(e);
+    }
+
+    // Updated method to handle background color selection
+    private void handleChooseBackgroundColor(ActionEvent e) {
+        Color initialColor = backgroundSettings.getBackgroundColor();
+        Color selectedColor = JColorChooser.showDialog(
+            mainFrame, 
+            "Choose Background Color", 
+            initialColor != null ? initialColor : Color.WHITE
+        );
+
+        if (selectedColor != null) {
+            // Update background settings
+            backgroundSettings.setBackgroundColor(selectedColor);
+            
+            // Optional: Provide visual feedback
+            statusLabel.setText("Background color updated");
         }
     }
 }
