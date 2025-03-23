@@ -1,30 +1,45 @@
 package com.editor;
 
 import java.awt.Color;
+import java.awt.Point;
+import java.util.List;
 
 import org.bytedeco.javacv.Frame;
 import org.bytedeco.javacv.Java2DFrameConverter;
 import org.bytedeco.javacv.OpenCVFrameConverter;
 import org.bytedeco.opencv.global.opencv_core;
 import org.bytedeco.opencv.global.opencv_imgproc;
-import static org.bytedeco.opencv.global.opencv_imgproc.GC_FGD;
-import static org.bytedeco.opencv.global.opencv_imgproc.GC_INIT_WITH_RECT;
-import static org.bytedeco.opencv.global.opencv_imgproc.GC_PR_FGD;
 import static org.bytedeco.opencv.global.opencv_imgproc.grabCut;
 import org.bytedeco.opencv.opencv_core.Mat;
 import org.bytedeco.opencv.opencv_core.Rect;
 import org.bytedeco.opencv.opencv_core.Scalar;
-import org.bytedeco.opencv.opencv_core.Size;
 
 import com.entities.BackgroundSettings;
+import com.entities.GrabCutMask;
 import com.entities.Photo;
 
+/**
+ * Implements background removal using OpenCV's GrabCut algorithm with a two-stage approach:
+ * 1. Initial segmentation with rectangle selection
+ * 2. Refinement using user markings for definite foreground/background
+ */
 public class BackgroundRemover implements ImageProcessor {
 
     private final BackgroundSettings settings;
     private final OpenCVFrameConverter.ToMat converter = new OpenCVFrameConverter.ToMat();
     private final Java2DFrameConverter java2dConverter = new Java2DFrameConverter();
+    
+    // Selection rectangle for initial segmentation
     private Rect selectionRect = null;
+    
+    // Store mask between stages
+    private GrabCutMask grabCutMask = null;
+    
+    // Original image for two-stage processing
+    private Mat originalImage = null;
+    
+    // Initial segmentation result
+    private Mat initialResult = null;
 
     public BackgroundRemover(BackgroundSettings settings) {
         this.settings = settings;
@@ -63,109 +78,119 @@ public class BackgroundRemover implements ImageProcessor {
         return this.selectionRect != null;
     }
 
+    /**
+     * Process a frame (implements ImageProcessor interface)
+     * 
+     * @param frame Input frame to process
+     * @return Processed frame
+     */
     @Override
-    public Photo process(Photo photo) {
-        // Get the processed frame directly instead of getting a BufferedImage
-        Frame frame = photo.getProcessedFrame().clone();
-
-        // Process the frame using your existing process method
-        Frame processedFrame = process(frame);
-
-        // Set the processed frame back to the photo
-        photo.setProcessedFrame(processedFrame);
-
-        // Return the updated photo object
-        return photo;
-    }
-
     public Frame process(Frame frame) {
-        Mat image = converter.convert(frame);
-
-        // Create mask for GrabCut
-        // Step 1: Properly Initialize mask as a Single-Channel Grayscale Image
-        Mat mask = new Mat(image.rows(), image.cols(), opencv_core.CV_8UC1, new Scalar(opencv_imgproc.GC_BGD));
-
+        // For direct frame processing, just perform initial segmentation
+        return performInitialSegmentation(frame);
+    }
+    
+    // We don't need to override the default process(Photo) method from the interface
+    // as it will call our process(Frame) method automatically
+    
+    /**
+     * Perform the initial segmentation using the rectangle selection
+     * 
+     * @param frame Input frame to process
+     * @return Processed frame with background replaced
+     */
+    public Frame performInitialSegmentation(Frame frame) {
+        // Convert frame to OpenCV Mat
+        originalImage = converter.convert(frame);
+        
+        // Initialize GrabCut mask
+        grabCutMask = new GrabCutMask(originalImage.cols(), originalImage.rows());
+        
         // Define rectangle for GrabCut - use manual selection if available, otherwise default
         Rect rectangle;
         if (selectionRect != null) {
             rectangle = selectionRect;
         } else {
             // Fall back to automatic rectangle with margin
-            int margin = Math.min(image.rows(), image.cols()) / 10;
+            int margin = Math.min(originalImage.rows(), originalImage.cols()) / 10;
             rectangle = new Rect(
                     margin,
                     margin,
-                    image.cols() - 2 * margin,
-                    image.rows() - 2 * margin
+                    originalImage.cols() - 2 * margin,
+                    originalImage.rows() - 2 * margin
             );
         }
-
-        // Create temporary matrices for GrabCut algorithm
-        Mat bgModel = new Mat();
-        Mat fgModel = new Mat();
-
-        // Convert image to HSV color space
-        Mat hsvImage = new Mat();
-        opencv_imgproc.cvtColor(image, hsvImage, opencv_imgproc.COLOR_BGR2HSV);
-
-// Define skin and clothing color ranges (Modify for different lighting conditions)
-        Scalar lowerSkin = new Scalar(0, 30, 60, 0);
-        Scalar upperSkin = new Scalar(20, 150, 255, 0);
-        Scalar lowerClothes = new Scalar(0, 50, 50, 0);
-        Scalar upperClothes = new Scalar(180, 255, 255, 0);
-
-        Mat lowerSkinMat = new Mat(1, 1, opencv_core.CV_8UC3, lowerSkin);
-        Mat upperSkinMat = new Mat(1, 1, opencv_core.CV_8UC3, upperSkin);
-        Mat lowerClothesMat = new Mat(1, 1, opencv_core.CV_8UC3, lowerClothes);
-        Mat upperClothesMat = new Mat(1, 1, opencv_core.CV_8UC3, upperClothes);
-
-// Create masks for skin and clothing
-        Mat skinMask = new Mat();
-        Mat clothesMask = new Mat();
-        opencv_core.inRange(hsvImage, lowerSkinMat, upperSkinMat, skinMask);
-        opencv_core.inRange(hsvImage, lowerClothesMat, upperClothesMat, clothesMask);
-
-// Combine skin and clothing masks
-        Mat combinedMask = new Mat();
-        opencv_core.bitwise_or(skinMask, clothesMask, combinedMask);
-
-        Mat kernel = opencv_imgproc.getStructuringElement(opencv_imgproc.MORPH_ELLIPSE, new Size(5, 5));
-        opencv_imgproc.dilate(combinedMask, combinedMask, kernel);
-
-        // Ensure probableFgMask is the same size and type as mask
-        Mat probableFgMask = new Mat(mask.size(), mask.type());
-        Mat whiteMat = new Mat(combinedMask.size(), combinedMask.type(), new Scalar(255)); // Mat filled with 255
-        opencv_core.compare(combinedMask, whiteMat, probableFgMask, opencv_core.CMP_EQ);
-
-        probableFgMask.convertTo(probableFgMask, opencv_core.CV_8UC1); // Convert to 8-bit
-
-// Step 2: Update the mask properly
-        Mat fgMaskValue = new Mat(mask.size(), mask.type(), new Scalar(opencv_imgproc.GC_PR_FGD));
-        fgMaskValue.copyTo(mask, probableFgMask);
-
-        new Rect(image.cols() / 10, image.rows() / 10, image.cols() * 8 / 10, image.rows() * 8 / 10);
-
+        
+        // Set the selection rectangle in the GrabCut mask
+        grabCutMask.setSelectionRect(
+                rectangle.x(),
+                rectangle.y(),
+                rectangle.width(),
+                rectangle.height()
+        );
+        
         // Apply GrabCut algorithm
-        grabCut(image, mask, rectangle, bgModel, fgModel,
-                settings.getIterations(), GC_INIT_WITH_RECT);
-
+        grabCut(originalImage, 
+                grabCutMask.getMask(), 
+                rectangle, 
+                grabCutMask.getBgModel(), 
+                grabCutMask.getFgModel(),
+                settings.getIterations(), 
+                opencv_imgproc.GC_INIT_WITH_RECT);
+        
+        // Create foreground mask for visualization
+        Mat foregroundMask = grabCutMask.createForegroundMask();
+        
+        // Apply the mask to get the segmented result
+        initialResult = applyMaskToImage(originalImage, foregroundMask);
+        
+        return converter.convert(initialResult);
+    }
+    
+    /**
+     * Refine the segmentation using foreground and background markings
+     * 
+     * @param foregroundPoints Points marked as definite foreground
+     * @param backgroundPoints Points marked as definite background
+     * @param brushSize Size of brush used for markings
+     * @return Processed frame with refined segmentation
+     */
+    public Frame refineSegmentation(List<Point> foregroundPoints, List<Point> backgroundPoints, int brushSize) {
+        // Ensure we have original image and mask
+        if (originalImage == null || grabCutMask == null) {
+            throw new IllegalStateException("Must perform initial segmentation before refinement");
+        }
+        
+        // Apply user markings to the mask
+        grabCutMask.markForeground(foregroundPoints, brushSize);
+        grabCutMask.markBackground(backgroundPoints, brushSize);
+        
+        // Apply GrabCut algorithm with the updated mask
+        grabCut(originalImage, 
+                grabCutMask.getMask(), 
+                new Rect(), // Empty rect as we're using mask initialization
+                grabCutMask.getBgModel(), 
+                grabCutMask.getFgModel(),
+                settings.getIterations(), 
+                opencv_imgproc.GC_INIT_WITH_MASK);
+        
         // Create foreground mask
-        Mat foregroundMask = new Mat();
-        Mat prFgdMat = new Mat(mask.size(), mask.type());
-        Mat scalarMat = new Mat(1, 1, prFgdMat.type(), new org.bytedeco.opencv.opencv_core.Scalar(GC_PR_FGD));
-        prFgdMat.setTo(scalarMat);
-        scalarMat.release();
-        opencv_core.compare(mask, prFgdMat, foregroundMask, opencv_core.CMP_EQ);
-        prFgdMat.release();
-
-        Mat fgdMat = new Mat(mask.size(), mask.type());
-        Mat scalarMatFgd = new Mat(1, 1, fgdMat.type(), new org.bytedeco.opencv.opencv_core.Scalar(GC_FGD));
-        fgdMat.setTo(scalarMatFgd);
-        scalarMatFgd.release();
-        opencv_core.compare(mask, fgdMat, mask, opencv_core.CMP_EQ);
-        fgdMat.release();
-        opencv_core.bitwise_or(foregroundMask, mask, foregroundMask);
-
+        Mat foregroundMask = grabCutMask.createForegroundMask();
+        
+        // Apply mask to original image
+        Mat refinedResult = applyMaskToImage(originalImage, foregroundMask);
+        
+        return converter.convert(refinedResult);
+    }
+    
+    /**
+     * Apply the foreground mask to an image and replace the background
+     * 
+     * @param image Original image
+     * @param foregroundMask Binary mask (255 for foreground, 0 for background)
+     * @return Image with background replaced
+     */
+    private Mat applyMaskToImage(Mat image, Mat foregroundMask) {
         // Create foreground image
         Mat foreground = new Mat(image.size(), image.type(), new Scalar(0, 0, 0, 0));
         image.copyTo(foreground, foregroundMask);
@@ -193,14 +218,151 @@ public class BackgroundRemover implements ImageProcessor {
         foreground.copyTo(result, foregroundMask);
 
         // Clean up resources
-        mask.release();
-        bgModel.release();
-        fgModel.release();
         foregroundMask.release();
         background.release();
         foreground.release();
         backgroundMask.release();
 
-        return converter.convert(result);
+        return result;
+    }
+    
+    /**
+     * Creates a visualization of the current mask for the refinement UI
+     * Shows overlay of original image with colored mask
+     * 
+     * @return Visualization frame
+     */
+    public Frame createMaskVisualization() {
+        if (originalImage == null || grabCutMask == null) {
+            throw new IllegalStateException("Must perform initial segmentation before visualization");
+        }
+       
+        // Create a copy of the original image
+        Mat visualization = originalImage.clone();
+       
+        // Get the foreground mask
+        Mat foregroundMask = grabCutMask.createForegroundMask();
+       
+        // Create a striped red overlay for background areas
+        Mat stripeOverlay = new Mat(originalImage.size(), originalImage.type(), new Scalar(0, 0, 0, 0));
+        
+        try {
+            // Create striped pattern
+            for (int y = 0; y < stripeOverlay.rows(); y++) {
+                for (int x = 0; x < stripeOverlay.cols(); x++) {
+                    // Create diagonal stripe pattern
+                    if ((x + y) % 10 < 5) {
+                        stripeOverlay.ptr(y, x).put(
+                            (byte)82,   // Blue
+                            (byte)3,     // Green
+                            (byte)82,     // Red
+                            (byte)100    // Alpha (transparency)
+                        );
+                    }
+                }
+            }
+       
+            // Create inverse of foreground mask (background mask)
+            Mat backgroundMask = new Mat();
+            try {
+                opencv_core.bitwise_not(foregroundMask, backgroundMask);
+       
+                // Apply striped overlay to background areas
+                Mat overlay = new Mat(originalImage.size(), originalImage.type());
+                try {
+                    visualization.copyTo(overlay);
+                    stripeOverlay.copyTo(overlay, backgroundMask);
+       
+                    // Blend with original (50% transparency)
+                    opencv_core.addWeighted(visualization, 0.7, overlay, 0.3, 0, visualization);
+                } finally {
+                    overlay.release();
+                }
+            } finally {
+                backgroundMask.release();
+            }
+        } finally {
+            stripeOverlay.release();
+        }
+       
+        // Clean up
+        foregroundMask.release();
+       
+        return converter.convert(visualization);
+    }
+    /**
+     * Get the current GrabCut mask
+     * 
+     * @return The GrabCut mask object
+     */
+    public GrabCutMask getGrabCutMask() {
+        return grabCutMask;
+    }
+    
+    /**
+     * Get the original image
+     * 
+     * @return The original image Mat
+     */
+    public Mat getOriginalImage() {
+        return originalImage;
+    }
+    
+    /**
+     * Get the initial segmentation result
+     * 
+     * @return The initial result Mat
+     */
+    public Mat getInitialResult() {
+        return initialResult;
+    }
+    
+    /**
+     * Apply background replacement to a photo using a final mask
+     * 
+     * @param photo Photo to process
+     * @return Processed photo
+     */
+    public Photo applyFinalMask(Photo photo) {
+        // Get the processed frame
+        Frame frame = photo.getProcessedFrame().clone();
+        
+        // Convert to Mat
+        Mat image = converter.convert(frame);
+        
+        // Create foreground mask
+        Mat foregroundMask = grabCutMask.createForegroundMask();
+        
+        // Apply mask
+        Mat result = applyMaskToImage(image, foregroundMask);
+        
+        // Convert back to frame
+        Frame processedFrame = converter.convert(result);
+        
+        // Set the processed frame back to the photo
+        photo.setProcessedFrame(processedFrame);
+        
+        // Release resources
+        image.release();
+        result.release();
+        
+        return photo;
+    }
+    
+    /**
+     * Clean up resources
+     */
+    public void release() {
+        if (grabCutMask != null) {
+            grabCutMask.release();
+        }
+        
+        if (originalImage != null) {
+            originalImage.release();
+        }
+        
+        if (initialResult != null) {
+            initialResult.release();
+        }
     }
 }

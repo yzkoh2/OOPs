@@ -391,26 +391,36 @@ public class MainApplication {
         }
 
         BackgroundRemovalHandler bgRemovalHandler = new BackgroundRemovalHandler(
-            mainFrame, 
-            statusLabel, 
-            currentPhoto, 
+            mainFrame,
+            statusLabel,
+            currentPhoto,
             backgroundSettings,
             new BackgroundRemovalHandler.BackgroundRemovalCallback() {
                 @Override
                 public void onBackgroundRemovalStarted() {
                     // Optional: Show loading state
                 }
-
                 @Override
                 public void onBackgroundRemovalCompleted(Photo processedPhoto) {
                     // Update current photo and preview
                     currentPhoto = processedPhoto;
                     updatePreview();
                 }
-
                 @Override
                 public void onBackgroundRemovalFailed(String errorMessage) {
                     // Error handling is already done in the handler
+                }
+                @Override
+                public void onRefinementProgress(int attempts, boolean isSuccessful) {
+                    // Optional: Add progress tracking or user feedback
+                    if (!isSuccessful) {
+                        JOptionPane.showMessageDialog(
+                            mainFrame,
+                            "Refinement attempt " + attempts + " was unsuccessful.",
+                            "Refinement Warning",
+                            JOptionPane.WARNING_MESSAGE
+                        );
+                    }
                 }
             }
         );

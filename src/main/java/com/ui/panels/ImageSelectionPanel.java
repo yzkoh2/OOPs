@@ -97,13 +97,13 @@ public abstract class ImageSelectionPanel extends JPanel {
             Graphics2D g2d = (Graphics2D) g;
             // Fill with semi-transparent selection color
             g2d.setColor(selectionFillColor);
-            g2d.fillRect(selectionRect.x, selectionRect.y,
+            g2d.fillRect(selectionRect.x + x, selectionRect.y + y,
                     selectionRect.width, selectionRect.height);
-
+        
             // Draw border
             g2d.setColor(selectionBorderColor);
             g2d.setStroke(new BasicStroke(2));
-            g2d.drawRect(selectionRect.x, selectionRect.y,
+            g2d.drawRect(selectionRect.x + x, selectionRect.y + y,
                     selectionRect.width, selectionRect.height);
         }
     }
