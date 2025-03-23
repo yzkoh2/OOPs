@@ -389,7 +389,6 @@ public class MainApplication {
             );
             return;
         }
-
         BackgroundRemovalHandler bgRemovalHandler = new BackgroundRemovalHandler(
             mainFrame,
             statusLabel,
@@ -409,18 +408,6 @@ public class MainApplication {
                 @Override
                 public void onBackgroundRemovalFailed(String errorMessage) {
                     // Error handling is already done in the handler
-                }
-                @Override
-                public void onRefinementProgress(int attempts, boolean isSuccessful) {
-                    // Optional: Add progress tracking or user feedback
-                    if (!isSuccessful) {
-                        JOptionPane.showMessageDialog(
-                            mainFrame,
-                            "Refinement attempt " + attempts + " was unsuccessful.",
-                            "Refinement Warning",
-                            JOptionPane.WARNING_MESSAGE
-                        );
-                    }
                 }
             }
         );
