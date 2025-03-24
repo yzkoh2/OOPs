@@ -6,7 +6,9 @@ import java.util.List;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
+import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
+import javax.swing.Timer;
 
 import org.bytedeco.javacv.Frame;
 import javax.swing.JDialog;
@@ -14,6 +16,7 @@ import com.editor.BackgroundRemover;
 import com.entities.BackgroundSettings;
 import com.entities.Photo;
 import com.ui.panels.ForegroundRefinementPanel;
+
 
 /**
  * Handles the foreground refinement process for background removal.
@@ -110,10 +113,15 @@ public class ForegroundRefinementHandler {
                         applyRefinement(foregroundPoints, backgroundPoints, 
                             foregroundBrushSizes.isEmpty() ? 10 : foregroundBrushSizes.get(0));
                     }
-
+            
                     @Override
                     public void onResetRefinement() {
                         resetRefinement();
+                    }
+                    
+                    @Override
+                    public void onFinalizeRefinement() {
+                        finalizeRefinement(); // Directly call finalizeRefinement
                     }
                 }
             );
@@ -223,10 +231,17 @@ public class ForegroundRefinementHandler {
     /**
      * Finalize the refinement process.
      */
-    private void finalizeRefinement() {
+    public void finalizeRefinement() {
+        System.out.println("FINALIZE REFINEMENT START:");
+        System.out.println("Current Photo Details:");
+        System.out.println("  Current Photo: " + (currentPhoto != null));
+        if (currentPhoto != null) {
+            System.out.println("  Original Frame: " + (currentPhoto.getOriginalFrame() != null));
+            System.out.println("  Processed Frame: " + (currentPhoto.getProcessedFrame() != null));
+        }
         try {
             updateStatus("Applying final background replacement...");
-    
+
             // Make sure we have a valid backgroundRemover and photo
             if (backgroundRemover == null) {
                 throw new IllegalStateException("Background remover is null");
@@ -234,24 +249,48 @@ public class ForegroundRefinementHandler {
             if (currentPhoto == null) {
                 throw new IllegalStateException("Current photo is null");
             }
-    
-            // Apply final mask - save result to a local variable first
+
+            // Apply final mask and store the result in a separate variable
+            // This creates a new Photo object via the copy constructor
+            System.out.println("Applying final mask to photo...");
             Photo processedPhoto = backgroundRemover.applyFinalMask(currentPhoto);
-    
+            
+            // Verify we have a valid processed photo
+            if (processedPhoto == null) {
+                throw new IllegalStateException("Processed photo is null after applying mask");
+            }
+            
+            // Make sure the processed frame is not null
+            if (processedPhoto.getProcessedFrame() == null) {
+                throw new IllegalStateException("Processed frame is null in the processed photo");
+            }
+
             // Log success for debugging
             System.out.println("Background removal process completed successfully");
+            System.out.println("Original photo hash: " + System.identityHashCode(currentPhoto));
+            System.out.println("Processed photo hash: " + System.identityHashCode(processedPhoto));
             
-            // Notify completion - with the processed photo
-            notifyRefinementCompleted(processedPhoto);
-            updateStatus("Background removal complete.");
-    
+            // Store the reference to pass to the callback
+            final Photo finalProcessedPhoto = processedPhoto;
+            
+            // Close the dialog first to prevent any interference with the callback
+            if (refinementDialog != null && refinementDialog.isVisible()) {
+                refinementDialog.dispose();
+                refinementDialog = null;
+            }
+            
+            // Use SwingUtilities.invokeLater to make sure UI updates happen on EDT
+            SwingUtilities.invokeLater(() -> {
+                // Notify callback with the processed photo
+                notifyRefinementCompleted(finalProcessedPhoto);
+                updateStatus("Background removal complete.");
+            });
+
         } catch (Exception ex) {
             ex.printStackTrace();
             handleRefinementError(ex);
-        } finally {
-            // Cleanup resources AFTER everything is done
-            cleanup();
         }
+        // DO NOT cleanup resources here, move it to after callback completes
     }
 
     /**
@@ -308,21 +347,63 @@ public class ForegroundRefinementHandler {
     private void notifyRefinementCompleted(Photo processedPhoto) {
         if (callback != null) {
             try {
-                System.out.println("Notifying callback of refinement completion");
-                // Make sure we're passing the processed photo correctly
+                System.out.println("REFINEMENT CALLBACK: Notifying of completion");
+                
+                // Detailed logging of photo states
+                System.out.println("Photo State Details:");
+                System.out.println("  Processed Photo null: " + (processedPhoto == null));
+                System.out.println("  Current Photo null: " + (currentPhoto == null));
+                
                 if (processedPhoto == null) {
-                    System.err.println("Warning: processedPhoto is null in notifyRefinementCompleted");
-                    // Use current photo as fallback
-                    callback.onRefinementCompleted(currentPhoto);
-                } else {
-                    callback.onRefinementCompleted(processedPhoto);
+                    System.err.println("WARNING: Processed photo is null. Using current photo as fallback.");
+                    
+                    if (currentPhoto == null) {
+                        System.err.println("CRITICAL: Both processed and current photos are null!");
+                        return; // Prevent further processing
+                    }
+                    
+                    processedPhoto = currentPhoto;
                 }
+                
+                // Extensive frame logging
+                Frame processedFrame = processedPhoto.getProcessedFrame();
+                System.out.println("Processed Frame Details:");
+                System.out.println("  Frame null: " + (processedFrame == null));
+                
+                if (processedFrame != null) {
+                    System.out.println("  Width: " + processedFrame.imageWidth);
+                    System.out.println("  Height: " + processedFrame.imageHeight);
+                    System.out.println("  Depth: " + processedFrame.imageDepth);
+                    System.out.println("  Channels: " + processedFrame.imageChannels);
+                }
+                
+                // Object identity check
+                if (processedPhoto == currentPhoto) {
+                    System.err.println("WARNING: Processed photo is the same object as current photo!");
+                }
+                
+                // Invoke callback
+                callback.onRefinementCompleted(processedPhoto);
+                
+                // Cleanup with logging
+                System.out.println("Scheduling cleanup after callback");
+                new Timer(1000, e -> {
+                    ((Timer) e.getSource()).stop();
+                    System.out.println("Performing delayed cleanup");
+                    cleanup();
+                }).start();
+                
             } catch (Exception e) {
-                System.err.println("Error in refinement completion callback: " + e.getMessage());
+                System.err.println("CRITICAL: Error in refinement completion");
+                System.err.println("Exception Details:");
                 e.printStackTrace();
+                
+                // Ensure cleanup happens even on error
+                cleanup();
             }
         } else {
-            System.err.println("Warning: callback is null in notifyRefinementCompleted");
+            System.err.println("CRITICAL: Callback is null in notifyRefinementCompleted");
+            cleanup();
         }
     }
 
@@ -344,7 +425,7 @@ public class ForegroundRefinementHandler {
     /**
      * Cleanup resources.
      */
-    private void cleanup() {
+    private void cleanup() {    
         // Cleanup dialog and UI resources
         if (refinementDialog != null) {
             refinementDialog.dispose();

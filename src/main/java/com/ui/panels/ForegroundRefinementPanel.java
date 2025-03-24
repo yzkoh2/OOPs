@@ -40,6 +40,7 @@ public class ForegroundRefinementPanel extends JPanel {
             List<Integer> backgroundBrushSizes
         );
         void onResetRefinement();
+        void onFinalizeRefinement();
     }
     
     /**
@@ -140,8 +141,31 @@ public class ForegroundRefinementPanel extends JPanel {
             }
         });
         
+        JButton confirmButton = new JButton("Confirm");
+        confirmButton.addActionListener(e -> {
+            // Apply any remaining markings
+            if (callback != null) {
+                callback.onApplyRefinement(
+                    refinementModel.extractForegroundPoints(),
+                    refinementModel.extractBackgroundPoints(),
+                    refinementModel.extractForegroundBrushSizes(),
+                    refinementModel.extractBackgroundBrushSizes()
+                );
+                
+                // Call the new finalize method
+                callback.onFinalizeRefinement();
+            }
+            
+            // Close the dialog
+            Window window = SwingUtilities.getWindowAncestor(this);
+            if (window != null) {
+                window.dispose();
+            }
+        });
+        
         actionPanel.add(applyButton);
         actionPanel.add(resetButton);
+        actionPanel.add(confirmButton);
         
         return actionPanel;
     }
