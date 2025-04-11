@@ -15,17 +15,61 @@ import com.entities.BackgroundSettings;
 import com.entities.Photo;
 
 import ai.onnxruntime.OrtException;
+import java.io.File;
+import java.nio.file.Paths;
 
 public class BackgroundRemover implements ImageProcessor {
 
     private final BackgroundSettings settings;
     private final OpenCVFrameConverter.ToMat converter = new OpenCVFrameConverter.ToMat();
     private final Java2DFrameConverter java2dConverter = new Java2DFrameConverter();
-    private final ONNXMattePredictor mattePredictor;
+    private ONNXMattePredictor mattePredictor;
+    private boolean modelInitialized = false;
+    private String modelPath;
 
-    public BackgroundRemover(BackgroundSettings settings, String modelPath) throws OrtException {
+    /**
+     * Creates a new BackgroundRemover with the specified settings and model path.
+     * The model is loaded lazily when first needed.
+     * 
+     * @param settings Background settings (color, etc.)
+     * @param modelPath Path to the ONNX model file
+     */
+    public BackgroundRemover(BackgroundSettings settings, String modelPath) {
         this.settings = settings;
-        this.mattePredictor = new ONNXMattePredictor(modelPath);
+        this.modelPath = modelPath;
+    }
+    
+    /**
+     * Initialize the model if not already initialized
+     */
+    private synchronized void initializeModelIfNeeded() throws OrtException {
+        if (!modelInitialized) {
+            try {
+                // Check if model file exists
+                File modelFile = new File(modelPath);
+                if (!modelFile.exists()) {
+                    // Try to find the model in the classpath or relative to the working directory
+                    String alternativePath = Paths.get(System.getProperty("user.dir"), modelPath).toString();
+                    modelFile = new File(alternativePath);
+                    
+                    if (!modelFile.exists()) {
+                        throw new OrtException("Model file not found at: " + modelPath + 
+                                " or " + alternativePath);
+                    }
+                    
+                    // Update path to the found location
+                    this.modelPath = alternativePath;
+                }
+                
+                // Initialize the model
+                this.mattePredictor = new ONNXMattePredictor(modelPath);
+                this.modelInitialized = true;
+                System.out.println("ONNX model initialized successfully from: " + modelPath);
+            } catch (OrtException e) {
+                System.err.println("Failed to initialize model: " + e.getMessage());
+                throw e; // Re-throw to let caller handle it
+            }
+        }
     }
 
     @Override
@@ -38,8 +82,11 @@ public class BackgroundRemover implements ImageProcessor {
 
     public Frame process(Frame frame) {
         Mat image = converter.convert(frame);
-
+        
         try {
+            // Ensure model is initialized
+            initializeModelIfNeeded();
+            
             // Get alpha matte prediction (transparency mask)
             float[][] alphaMatte = mattePredictor.predictAlphaMatte(image);
 
@@ -78,21 +125,42 @@ public class BackgroundRemover implements ImageProcessor {
                 }
             }
 
+            // Cleanup resources
             imgIdx.release();
             compIdx.release();
 
             // Resize back to original dimensions before returning
             Mat finalImage = new Mat();
             opencv_imgproc.resize(composite, finalImage, image.size());
+            
+            // Cleanup resources
             composite.release();
             resized.release();
-
-            return converter.convert(finalImage);
+            
+            Frame result = converter.convert(finalImage);
+            finalImage.release();
+            image.release();
+            
+            return result;
 
         } catch (OrtException e) {
             e.printStackTrace();
             System.err.println("Error in background removal: " + e.getMessage());
+            // Ensure resources are released even on error
+            image.release();
             return frame; // Return original frame if processing fails
         }
+    }
+    
+    /**
+     * Releases resources associated with this BackgroundRemover
+     */
+    public void close() {
+        // No explicit close method in ONNXMattePredictor yet, but would be good to add
+        modelInitialized = false;
+        mattePredictor = null;
+        // System.gc() is generally not recommended but could be useful here
+        // to ensure ONNX resources are released, especially during batch processing
+        System.gc();
     }
 }

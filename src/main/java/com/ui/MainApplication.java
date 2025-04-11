@@ -31,6 +31,7 @@ import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JColorChooser;
 import javax.swing.JComboBox;
+import javax.swing.JDialog;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -66,6 +67,11 @@ import com.entities.Photo;
 import com.util.Constants;
 import com.util.FileUtils;
 
+import java.util.List;
+import java.util.ArrayList;
+import com.editor.BatchProcessor;
+import com.gui.BatchProcessingPanel;
+
 public class MainApplication {
 
     // UI components
@@ -95,6 +101,11 @@ public class MainApplication {
 
     // History manager for undo/redo operations
     private PhotoHistory photoHistory;
+
+    // Add to the class-level fields:
+    private JFrame batchProcessingFrame;
+    private BatchProcessingPanel batchPanel;
+    private List<File> batchInputFiles = new ArrayList<>();
 
     public static void main(String[] args) {
         // Set system look and feel
@@ -127,6 +138,7 @@ public class MainApplication {
                 config.getIntProperty("ui.window.width", Constants.DEFAULT_WINDOW_WIDTH),
                 config.getIntProperty("ui.window.height", Constants.DEFAULT_WINDOW_HEIGHT)
         );
+        mainFrame.setExtendedState(JFrame.MAXIMIZED_BOTH);
         mainFrame.setLocationRelativeTo(null);
 
         // Create menu bar
@@ -174,6 +186,11 @@ public class MainApplication {
         openItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_O, KeyEvent.CTRL_DOWN_MASK));
         openItem.addActionListener(this::handleOpenImage);
 
+        // Add new item for batch processing
+        JMenuItem batchItem = new JMenuItem("Batch Process");
+        batchItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_B, KeyEvent.CTRL_DOWN_MASK));
+        batchItem.addActionListener(this::handleBatchProcess);        
+
         JMenuItem saveItem = new JMenuItem("Save");
         saveItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_S, KeyEvent.CTRL_DOWN_MASK));
         saveItem.addActionListener(this::handleSaveImage);
@@ -182,6 +199,7 @@ public class MainApplication {
         exitItem.addActionListener(e -> mainFrame.dispose());
 
         fileMenu.add(openItem);
+        fileMenu.add(batchItem);
         fileMenu.add(saveItem);
         fileMenu.addSeparator();
         fileMenu.add(exitItem);
@@ -270,6 +288,11 @@ public class MainApplication {
         JButton openButton = new JButton("Open Image");
         openButton.addActionListener(this::handleOpenImage);
         filePanel.add(openButton);
+        
+        // Add batch processing button
+        JButton batchButton = new JButton("Batch Process");
+        batchButton.addActionListener(this::handleBatchProcess);
+        filePanel.add(batchButton);
 
         JButton saveButton = new JButton("Save Image");
         saveButton.addActionListener(this::handleSaveImage);
@@ -423,6 +446,7 @@ public class MainApplication {
 
         return panel;
     }
+    
     // --- Event Handlers ---
 
     private void handleUndo(ActionEvent e) {
@@ -756,6 +780,7 @@ public class MainApplication {
         worker.execute();
     }
 
+    
     private void generateLayoutSheet(String layoutOption) {
         statusLabel.setText("Generating layout sheet...");
 
@@ -968,6 +993,278 @@ public class MainApplication {
             return selectionRect;
         }
     }
+
+    // Add the handler for batch processing:
+private void handleBatchProcess(ActionEvent e) {
+    // Create a file chooser that allows multiple file selection
+    JFileChooser fileChooser = new JFileChooser();
+    fileChooser.setDialogTitle("Select Photos for Batch Processing");
+    fileChooser.setMultiSelectionEnabled(true);
+    fileChooser.setFileFilter(new FileNameExtensionFilter("Image files", Constants.SUPPORTED_INPUT_FORMATS));
+    
+    if (fileChooser.showOpenDialog(mainFrame) == JFileChooser.APPROVE_OPTION) {
+        File[] selectedFiles = fileChooser.getSelectedFiles();
+        
+        // Validate we have at least one file
+        if (selectedFiles.length == 0) {
+            JOptionPane.showMessageDialog(mainFrame,
+                    "No files selected for batch processing.",
+                    "No Files Selected", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        
+        // Store the selected files
+        batchInputFiles = new ArrayList<>();
+        for (File file : selectedFiles) {
+            if (FileUtils.isImageFile(file)) {
+                batchInputFiles.add(file);
+            } else {
+                JOptionPane.showMessageDialog(mainFrame,
+                        "Skipping unsupported file: " + file.getName(),
+                        "Unsupported File", JOptionPane.WARNING_MESSAGE);
+            }
+        }
+        
+        // If no valid files, exit early
+        if (batchInputFiles.isEmpty()) {
+            JOptionPane.showMessageDialog(mainFrame,
+                    "No valid image files were selected for batch processing.",
+                    "No Valid Files", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        
+        // Create and show the batch processing options dialog
+        showBatchOptionsDialog();
+    }
+}
+
+private void showBatchOptionsDialog() {
+    // Create a dialog for batch processing options
+    JDialog optionsDialog = new JDialog(mainFrame, "Batch Processing Options", true);
+    optionsDialog.setLayout(new BorderLayout(10, 10));
+    optionsDialog.setSize(450, 350);
+    optionsDialog.setLocationRelativeTo(mainFrame);
+    
+    JPanel optionsPanel = new JPanel();
+    optionsPanel.setLayout(new BoxLayout(optionsPanel, BoxLayout.Y_AXIS));
+    optionsPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+    
+    // Add file info
+    JPanel fileInfoPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+    fileInfoPanel.add(new JLabel("Processing " + batchInputFiles.size() + " files"));
+    optionsPanel.add(fileInfoPanel);
+    optionsPanel.add(Box.createRigidArea(new Dimension(0, 10)));
+    
+    // Add dimension inputs (reuse code from main panel)
+    JPanel dimensionPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+    JTextField batchWidthField = new JTextField(5);
+    JTextField batchHeightField = new JTextField(5);
+    
+    // Pre-fill with current or standard dimensions
+    batchWidthField.setText(widthField.getText());
+    batchHeightField.setText(heightField.getText());
+    
+    dimensionPanel.add(new JLabel("Width (mm):"));
+    dimensionPanel.add(batchWidthField);
+    dimensionPanel.add(Box.createRigidArea(new Dimension(10, 0)));
+    dimensionPanel.add(new JLabel("Height (mm):"));
+    dimensionPanel.add(batchHeightField);
+    optionsPanel.add(dimensionPanel);
+    optionsPanel.add(Box.createRigidArea(new Dimension(0, 10)));
+    
+    // Add background color chooser
+    JPanel bgColorPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+    JLabel colorPreview = new JLabel("  ");
+    colorPreview.setOpaque(true);
+    colorPreview.setBackground(backgroundSettings.getBackgroundColor());
+    colorPreview.setBorder(BorderFactory.createLineBorder(Color.BLACK));
+    colorPreview.setPreferredSize(new Dimension(20, 20));
+    
+    JButton bgColorButton = new JButton("Choose Background Color");
+    bgColorButton.addActionListener(evt -> {
+        Color initialColor = colorPreview.getBackground();
+        Color selectedColor = JColorChooser.showDialog(optionsDialog, "Choose Background Color", initialColor);
+        
+        if (selectedColor != null) {
+            colorPreview.setBackground(selectedColor);
+        }
+    });
+    
+    bgColorPanel.add(bgColorButton);
+    bgColorPanel.add(colorPreview);
+    optionsPanel.add(bgColorPanel);
+    optionsPanel.add(Box.createRigidArea(new Dimension(0, 10)));
+    
+    // Add output format selection
+    JPanel formatPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+    JComboBox<String> formatComboBox = new JComboBox<>(Constants.SUPPORTED_OUTPUT_FORMATS);
+    formatComboBox.setSelectedItem(exportSettings.getFormat().getExtension());
+    
+    formatPanel.add(new JLabel("Output Format:"));
+    formatPanel.add(formatComboBox);
+    optionsPanel.add(formatPanel);
+    optionsPanel.add(Box.createRigidArea(new Dimension(0, 10)));
+    
+    // Add output directory selection
+    JPanel outputDirPanel = new JPanel(new BorderLayout(5, 0));
+    JTextField outputDirField = new JTextField(exportSettings.getOutputDirectory());
+    JButton browseButton = new JButton("Browse...");
+    
+    browseButton.addActionListener(evt -> {
+        JFileChooser dirChooser = new JFileChooser();
+        dirChooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+        dirChooser.setDialogTitle("Select Output Directory");
+        
+        if (dirChooser.showDialog(optionsDialog, "Select") == JFileChooser.APPROVE_OPTION) {
+            outputDirField.setText(dirChooser.getSelectedFile().getAbsolutePath());
+        }
+    });
+    
+    outputDirPanel.add(new JLabel("Output Directory:"), BorderLayout.NORTH);
+    outputDirPanel.add(outputDirField, BorderLayout.CENTER);
+    outputDirPanel.add(browseButton, BorderLayout.EAST);
+    optionsPanel.add(outputDirPanel);
+    
+    // Add buttons
+    JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+    JButton cancelButton = new JButton("Cancel");
+    JButton startButton = new JButton("Start Batch Processing");
+    
+    cancelButton.addActionListener(evt -> optionsDialog.dispose());
+    
+    startButton.addActionListener(evt -> {
+        // Validate inputs
+        try {
+            int width = Integer.parseInt(batchWidthField.getText().trim());
+            int height = Integer.parseInt(batchHeightField.getText().trim());
+            
+            if (width <= 0 || height <= 0) {
+                throw new NumberFormatException("Dimensions must be positive");
+            }
+            
+            String outputDir = outputDirField.getText().trim();
+            if (outputDir.isEmpty()) {
+                JOptionPane.showMessageDialog(optionsDialog,
+                        "Please select an output directory.",
+                        "Missing Output Directory", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            
+            // Update settings based on user selections
+            BackgroundSettings batchBgSettings = new BackgroundSettings();
+            batchBgSettings.setBackgroundColor(colorPreview.getBackground());
+            
+            ExportSettings batchExportSettings = new ExportSettings();
+            String format = (String) formatComboBox.getSelectedItem();
+            if ("jpg".equals(format) || "jpeg".equals(format)) {
+                batchExportSettings.setFormat(ExportSettings.ImageFormat.JPEG);
+            } else if ("png".equals(format)) {
+                batchExportSettings.setFormat(ExportSettings.ImageFormat.PNG);
+            } else if ("bmp".equals(format)) {
+                batchExportSettings.setFormat(ExportSettings.ImageFormat.BMP);
+            }
+            batchExportSettings.setOutputDirectory(outputDir);
+            
+            // Close the options dialog
+            optionsDialog.dispose();
+            
+            // Start batch processing
+            startBatchProcessing(
+                    batchInputFiles,
+                    outputDir,
+                    batchBgSettings,
+                    batchExportSettings,
+                    width, 
+                    height,
+                    true // maintain aspect ratio
+            );
+            
+        } catch (NumberFormatException nfe) {
+            JOptionPane.showMessageDialog(optionsDialog,
+                    "Please enter valid numeric dimensions.",
+                    "Invalid Dimensions", JOptionPane.ERROR_MESSAGE);
+        }
+    });
+    
+    buttonPanel.add(cancelButton);
+    buttonPanel.add(startButton);
+    
+    // Assemble the dialog
+    optionsDialog.add(new JScrollPane(optionsPanel), BorderLayout.CENTER);
+    optionsDialog.add(buttonPanel, BorderLayout.SOUTH);
+    optionsDialog.setVisible(true);
+}
+
+private void startBatchProcessing(
+        List<File> inputFiles,
+        String outputDir,
+        BackgroundSettings bgSettings,
+        ExportSettings exportSettings,
+        int widthMM,
+        int heightMM,
+        boolean maintainAspectRatio) {
+    
+    // Create the batch processing panel and frame
+    if (batchPanel == null) {
+        batchPanel = new BatchProcessingPanel();
+    } else {
+        batchPanel.clearResults();
+    }
+    
+    if (batchProcessingFrame == null) {
+        batchProcessingFrame = new JFrame("Batch Processing");
+        batchProcessingFrame.setSize(600, 400);
+        batchProcessingFrame.setLocationRelativeTo(mainFrame);
+        batchProcessingFrame.setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
+    }
+    
+    batchPanel.setCloseAction(() -> batchProcessingFrame.setVisible(false));
+    batchProcessingFrame.setContentPane(batchPanel);
+    batchProcessingFrame.setVisible(true);
+    
+    // Start the batch processor
+    BatchProcessor processor = new BatchProcessor(
+            inputFiles,
+            outputDir,
+            bgSettings,
+            exportSettings,
+            widthMM,
+            heightMM,
+            maintainAspectRatio);
+    
+    // Set up progress callback
+    processor.onProgress(progressPercent -> {
+        SwingUtilities.invokeLater(() -> {
+            batchPanel.setProgress(progressPercent);
+        });
+    });
+    
+    // Set up completion callback
+    processor.onComplete(outputFiles -> {
+        SwingUtilities.invokeLater(() -> {
+            batchPanel.setResults(inputFiles, outputFiles);
+            batchPanel.setProgress(100);
+            
+            // Show a notification
+            JOptionPane.showMessageDialog(
+                    batchProcessingFrame,
+                    "Batch processing complete.\n" +
+                    "Successfully processed " + outputFiles.size() + " out of " + inputFiles.size() + " files.",
+                    "Processing Complete",
+                    JOptionPane.INFORMATION_MESSAGE);
+        });
+    });
+    
+    // Set up error callback
+    processor.onError(errorMessage -> {
+        SwingUtilities.invokeLater(() -> {
+            statusLabel.setText("Error: " + errorMessage);
+        });
+    });
+    
+    // Start processing
+    processor.process();
+}
 
     // Removed unused SelectionPanel class if it existed
 }
