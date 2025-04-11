@@ -290,20 +290,20 @@ public class MainApplication {
         processSettingsPanel.setLayout(new BoxLayout(processSettingsPanel, BoxLayout.Y_AXIS));
         processSettingsPanel.setBorder(BorderFactory.createTitledBorder("Step 2: Configure Settings"));
     
-        // Dimension Inputs
+        // Dimension Inputs in millimeters
         JPanel dimensionPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         widthField = new JTextField(5);
         heightField = new JTextField(5);
-        
-        // Pre-fill with standard ID photo dimensions
+
+        // Pre-fill with standard ID photo dimensions in mm
         ApplicationConfig config = ApplicationConfig.getInstance();
-        widthField.setText(String.valueOf(Constants.PASSPORT_PHOTO_WIDTH_PX));
-        heightField.setText(String.valueOf(Constants.PASSPORT_PHOTO_HEIGHT_PX));
-    
-        dimensionPanel.add(new JLabel("Width (px):"));
+        widthField.setText(String.valueOf(Constants.PASSPORT_PHOTO_WIDTH_MM));
+        heightField.setText(String.valueOf(Constants.PASSPORT_PHOTO_HEIGHT_MM));
+
+        dimensionPanel.add(new JLabel("Width (mm):"));
         dimensionPanel.add(widthField);
         dimensionPanel.add(Box.createRigidArea(new Dimension(10, 0)));
-        dimensionPanel.add(new JLabel("Height (px):"));
+        dimensionPanel.add(new JLabel("Height (mm):"));
         dimensionPanel.add(heightField);
         processSettingsPanel.add(dimensionPanel);
     
@@ -596,18 +596,20 @@ public class MainApplication {
     // --- NEW Combined Handler for Background Removal and Resizing ---
 // Updated handler for the Process Background and Resize button
 
+// Updated handler for the Process Background and Resize button
+
 private void handleProcessBackgroundAndResize(ActionEvent e) {
     if (currentPhoto == null) {
         JOptionPane.showMessageDialog(mainFrame, "No image loaded.", "Error", JOptionPane.ERROR_MESSAGE);
         return;
     }
 
-    // --- Get User Inputs ---
-    int targetWidth, targetHeight;
+    // --- Get User Inputs (in millimeters) ---
+    int targetWidthMM, targetHeightMM;
     try {
-        targetWidth = Integer.parseInt(widthField.getText().trim());
-        targetHeight = Integer.parseInt(heightField.getText().trim());
-        if (targetWidth <= 0 || targetHeight <= 0) {
+        targetWidthMM = Integer.parseInt(widthField.getText().trim());
+        targetHeightMM = Integer.parseInt(heightField.getText().trim());
+        if (targetWidthMM <= 0 || targetHeightMM <= 0) {
             throw new NumberFormatException("Dimensions must be positive.");
         }
     } catch (NumberFormatException ex) {
@@ -617,6 +619,10 @@ private void handleProcessBackgroundAndResize(ActionEvent e) {
             JOptionPane.ERROR_MESSAGE);
         return;
     }
+    
+    // Convert MM to pixels using the PIXELS_PER_MM constant
+    int targetWidth = targetWidthMM * Constants.PIXELS_PER_MM;
+    int targetHeight = targetHeightMM * Constants.PIXELS_PER_MM;
 
     // --- Process in Background ---
     photoHistory.saveState(currentPhoto); // Save state before combined action
@@ -683,7 +689,6 @@ private void handleProcessBackgroundAndResize(ActionEvent e) {
 
     worker.execute();
 }
-
     // --- Modified: Only chooses and stores color ---
     private void handleChooseBackgroundColor(ActionEvent e) {
         Color initialColor = backgroundSettings.getBackgroundColor();
