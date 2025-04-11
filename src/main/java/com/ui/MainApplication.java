@@ -47,6 +47,7 @@ import com.config.ApplicationConfig;
 import com.editor.BackgroundRemover;
 import com.editor.ImageExporter;
 import com.editor.ImageResizer;
+import com.editor.PhotoHistory;
 import com.entities.BackgroundSettings;
 import com.entities.ExportSettings;
 import com.entities.Photo;
@@ -65,6 +66,7 @@ public class MainApplication {
     private JPanel controlPanel;
     private JPanel statusPanel;
     private JLabel statusLabel;
+    private JButton undoButton;
 
     // Application state
     private Photo currentPhoto;
@@ -72,6 +74,9 @@ public class MainApplication {
     private ExportSettings exportSettings;
     private Rectangle cropRect;
     private boolean isCropping = false;
+    
+    // History manager for undo operations
+    private PhotoHistory photoHistory;
 
     public static void main(String[] args) {
         // Set system look and feel
@@ -93,6 +98,9 @@ public class MainApplication {
         // Initialize settings
         backgroundSettings = new BackgroundSettings();
         exportSettings = new ExportSettings();
+        
+        // Initialize photo history
+        photoHistory = new PhotoHistory();
 
         // Set up the main window
         mainFrame = new JFrame(Constants.APP_NAME);
@@ -202,6 +210,17 @@ public class MainApplication {
         JButton resizeButton = new JButton("Resize to ID Format");
         resizeButton.addActionListener(this::handleResize);
         editPanel.add(resizeButton);
+        
+        // Add undo button
+        undoButton = new JButton("Undo");
+        undoButton.addActionListener(this::handleUndo);
+        undoButton.setEnabled(false); // Initially disabled until we have history
+        editPanel.add(undoButton);
+        
+        // Add reset button
+        JButton resetButton = new JButton("Reset to Original");
+        resetButton.addActionListener(e -> handleReset());
+        editPanel.add(resetButton);
 
         panel.add(editPanel);
         panel.add(Box.createRigidArea(new Dimension(0, 10)));
@@ -249,6 +268,27 @@ public class MainApplication {
 
         return panel;
     }
+    
+    /**
+     * Handle undo button click
+     */
+    private void handleUndo(ActionEvent e) {
+        if (!photoHistory.canUndo()) {
+            return;
+        }
+        
+        // Restore the previous state
+        Photo previousState = photoHistory.undo();
+        if (previousState != null) {
+            currentPhoto = previousState;
+            updatePreview();
+            
+            // Update undo button state
+            undoButton.setEnabled(photoHistory.canUndo());
+            
+            statusLabel.setText("Undo completed");
+        }
+    }
 
     private void handleOpenImage(ActionEvent e) {
         JFileChooser fileChooser = new JFileChooser();
@@ -288,6 +328,11 @@ public class MainApplication {
             protected void done() {
                 try {
                     currentPhoto = get();
+                    
+                    // Clear history when loading a new image
+                    photoHistory.clear();
+                    undoButton.setEnabled(false);
+                    
                     updatePreview();
                     statusLabel.setText("Image loaded: " + file.getName());
                 } catch (InterruptedException | ExecutionException ex) {
@@ -367,6 +412,9 @@ public class MainApplication {
             );
             return;
         }
+        
+        // Save the current state before cropping
+        photoHistory.saveState(currentPhoto);
 
         // Create a custom panel for interactive cropping
         BufferedImage image = currentPhoto.getProcessedBufferedImage();
@@ -461,6 +509,10 @@ public class MainApplication {
                         try {
                             get(); // Check for exceptions
                             updatePreview();
+                            
+                            // Enable undo button
+                            undoButton.setEnabled(photoHistory.canUndo());
+                            
                             statusLabel.setText("Image cropped successfully");
                         } catch (Exception ex) {
                             JOptionPane.showMessageDialog(
@@ -490,7 +542,6 @@ public class MainApplication {
         cancelButton.addActionListener(cancelEvent -> cropFrame.dispose());
     }
 
-// Custom panel for interactive cropping
     private class CropPanel extends JPanel {
 
         private BufferedImage image;
@@ -559,8 +610,6 @@ public class MainApplication {
         }
     }
 
-// Selection panel specific for background removal
-// (You can reuse your CropPanel or create a specialized one)
     private class SelectionPanel extends JPanel {
 
         private BufferedImage image;
@@ -635,6 +684,9 @@ public class MainApplication {
             );
             return;
         }
+        
+        // Save the current state before removing background
+        photoHistory.saveState(currentPhoto);
     
         statusLabel.setText("Removing background...");
     
@@ -652,6 +704,10 @@ public class MainApplication {
                 try {
                     get(); // Check for exceptions
                     updatePreview();
+                    
+                    // Enable undo button
+                    undoButton.setEnabled(photoHistory.canUndo());
+                    
                     statusLabel.setText("Background removed successfully");
                 } catch (Exception ex) {
                     JOptionPane.showMessageDialog(
@@ -668,44 +724,6 @@ public class MainApplication {
         worker.execute();
     }
     
-
-    // private void handleRemoveBackground(ActionEvent e) {
-    //     if (currentPhoto == null) {
-    //         JOptionPane.showMessageDialog(
-    //             mainFrame,
-    //             "No image loaded.",
-    //             "Error",
-    //             JOptionPane.ERROR_MESSAGE
-    //         );
-    //         return;
-    //     }
-    //     statusLabel.setText("Removing background...");
-    //     SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>() {
-    //         @Override
-    //         protected Void doInBackground() throws Exception {
-    //             BackgroundRemover remover = new BackgroundRemover(backgroundSettings);
-    //             remover.process(currentPhoto);
-    //             return null;
-    //         }
-    //         @Override
-    //         protected void done() {
-    //             try {
-    //                 get(); // Check for exceptions
-    //                 updatePreview();
-    //                 statusLabel.setText("Background removed");
-    //             } catch (InterruptedException | ExecutionException ex) {
-    //                 JOptionPane.showMessageDialog(
-    //                     mainFrame,
-    //                     "Error removing background: " + ex.getMessage(),
-    //                     "Error",
-    //                     JOptionPane.ERROR_MESSAGE
-    //                 );
-    //                 statusLabel.setText("Failed to remove background");
-    //             }
-    //         }
-    //     };
-    //     worker.execute();
-    // }
     private void handleResize(ActionEvent e) {
         if (currentPhoto == null) {
             JOptionPane.showMessageDialog(
@@ -716,6 +734,9 @@ public class MainApplication {
             );
             return;
         }
+        
+        // Save the current state before resizing
+        photoHistory.saveState(currentPhoto);
 
         statusLabel.setText("Resizing image...");
 
@@ -747,6 +768,10 @@ public class MainApplication {
                 try {
                     get(); // Check for exceptions
                     updatePreview();
+                    
+                    // Enable undo button
+                    undoButton.setEnabled(photoHistory.canUndo());
+                    
                     statusLabel.setText("Image resized to ID photo dimensions");
                 } catch (InterruptedException | ExecutionException ex) {
                     JOptionPane.showMessageDialog(
@@ -779,6 +804,27 @@ public class MainApplication {
                 handleRemoveBackground(e);
             }
         }
+    }
+    
+    /**
+     * Resets the current photo to its original state
+     */
+    private void handleReset() {
+        if (currentPhoto == null) {
+            return;
+        }
+        
+        // Save current state before resetting
+        photoHistory.saveState(currentPhoto);
+        
+        // Reset to original
+        currentPhoto.resetToOriginal();
+        updatePreview();
+        
+        // Enable undo button
+        undoButton.setEnabled(photoHistory.canUndo());
+        
+        statusLabel.setText("Image reset to original");
     }
 
     private void updatePreview() {

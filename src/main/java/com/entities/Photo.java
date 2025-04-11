@@ -9,7 +9,7 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.time.LocalDateTime;
 
-public class Photo {
+public class Photo implements Cloneable {
     private Frame originalFrame;
     private Frame processedFrame;
     private String fileName;
@@ -80,5 +80,40 @@ public class Photo {
     
     public LocalDateTime getUploadTime() {
         return uploadTime;
+    }
+    
+    /**
+     * Creates a deep copy of the Photo object
+     * @return A cloned Photo object with copies of all frames
+     */
+    @Override
+    public Photo clone() {
+        try {
+            Photo clone = (Photo) super.clone();
+            
+            // Deep copy frames
+            if (this.originalFrame != null) {
+                clone.originalFrame = this.originalFrame.clone();
+            }
+            
+            if (this.processedFrame != null) {
+                clone.processedFrame = this.processedFrame.clone();
+            }
+            
+            return clone;
+        } catch (CloneNotSupportedException e) {
+            // This should not happen since we implement Cloneable
+            throw new RuntimeException("Failed to clone Photo", e);
+        }
+    }
+    
+    /**
+     * Resets the processed frame to match the original frame
+     */
+    public void resetToOriginal() {
+        if (originalFrame != null) {
+            this.processedFrame = originalFrame.clone();
+            updateDimensions();
+        }
     }
 }

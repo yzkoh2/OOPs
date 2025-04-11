@@ -2,6 +2,8 @@ com/entities/ExportSettings.class
 com/util/Constants.class
 com/editor/ImageExporter.class
 com/config/ApplicationConfig.class
+com/editor/ONNXMattePredictor.class
+com/editor/PhotoHistory.class
 com/ui/MainApplication$3.class
 com/util/ImageUtils.class
 com/gui/GUI.class
