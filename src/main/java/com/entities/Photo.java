@@ -1,5 +1,6 @@
 package com.entities;
 
+import org.bytedeco.javacv.FFmpegFrameGrabber;
 import org.bytedeco.javacv.Frame;
 import org.bytedeco.javacv.Java2DFrameConverter;
 import org.bytedeco.javacv.OpenCVFrameConverter;
@@ -10,7 +11,8 @@ import java.io.File;
 import java.time.LocalDateTime;
 
 public class Photo implements Cloneable {
-    private Frame originalFrame;
+    // Store original image as BufferedImage for stability
+    private BufferedImage originalBufferedImage;
     private Frame processedFrame;
     private String fileName;
     private LocalDateTime uploadTime;
@@ -22,7 +24,9 @@ public class Photo implements Cloneable {
     private static final OpenCVFrameConverter.ToMat matConverter = new OpenCVFrameConverter.ToMat();
     
     public Photo(Frame frame, String fileName, File sourceFile) {
-        this.originalFrame = frame;
+        // Store original as BufferedImage to prevent corruption
+        this.originalBufferedImage = java2DConverter.convert(frame);
+        // Keep processed frame as Frame for editing
         this.processedFrame = frame.clone();
         this.fileName = fileName;
         this.uploadTime = LocalDateTime.now();
@@ -38,7 +42,8 @@ public class Photo implements Cloneable {
     }
     
     public Frame getOriginalFrame() {
-        return originalFrame;
+        // Convert the stored BufferedImage back to a Frame when needed
+        return java2DConverter.convert(originalBufferedImage);
     }
     
     public Frame getProcessedFrame() {
@@ -55,7 +60,7 @@ public class Photo implements Cloneable {
     }
     
     public BufferedImage getOriginalBufferedImage() {
-        return java2DConverter.convert(originalFrame);
+        return originalBufferedImage;
     }
     
     public Mat getProcessedMat() {
@@ -91,13 +96,24 @@ public class Photo implements Cloneable {
         try {
             Photo clone = (Photo) super.clone();
             
-            // Deep copy frames
-            if (this.originalFrame != null) {
-                clone.originalFrame = this.originalFrame.clone();
+            // Deep copy the original BufferedImage
+            if (this.originalBufferedImage != null) {
+                // Create a new BufferedImage with the same properties
+                BufferedImage copy = new BufferedImage(
+                    this.originalBufferedImage.getWidth(),
+                    this.originalBufferedImage.getHeight(),
+                    this.originalBufferedImage.getType());
+                
+                // Copy the pixel data
+                copy.getGraphics().drawImage(this.originalBufferedImage, 0, 0, null);
+                clone.originalBufferedImage = copy;
             }
             
+            // Deep copy the processed frame
             if (this.processedFrame != null) {
-                clone.processedFrame = this.processedFrame.clone();
+                // Convert to BufferedImage and back for clean copy
+                BufferedImage temp = java2DConverter.convert(this.processedFrame);
+                clone.processedFrame = java2DConverter.convert(temp);
             }
             
             return clone;
@@ -108,12 +124,49 @@ public class Photo implements Cloneable {
     }
     
     /**
-     * Resets the processed frame to match the original frame
+     * Primary implementation: Reset using the stored BufferedImage
      */
     public void resetToOriginal() {
-        if (originalFrame != null) {
-            this.processedFrame = originalFrame.clone();
-            updateDimensions();
+        if (originalBufferedImage != null) {
+            // Convert the original BufferedImage back to a Frame
+            try {
+                // Clean conversion through BufferedImage
+                this.processedFrame = java2DConverter.convert(originalBufferedImage);
+                updateDimensions();
+                System.out.println("Reset to original using BufferedImage conversion");
+            } catch (Exception e) {
+                System.err.println("Error in primary reset method: " + e.getMessage());
+                // Fall back to secondary methods
+                resetToOriginalFromFile();
+            }
+        } else {
+            // If original BufferedImage is null, try to reset from file
+            resetToOriginalFromFile();
+        }
+    }
+    
+    /**
+     * Fallback implementation: Reload from source file
+     */
+    private void resetToOriginalFromFile() {
+        if (sourceFile != null && sourceFile.exists()) {
+            try {
+                // Reload the image from its source file
+                FFmpegFrameGrabber grabber = new FFmpegFrameGrabber(sourceFile);
+                grabber.start();
+                this.processedFrame = grabber.grabImage();
+                grabber.stop();
+                
+                // Also update the original BufferedImage
+                this.originalBufferedImage = java2DConverter.convert(this.processedFrame);
+                
+                updateDimensions();
+                System.out.println("Reset to original by reloading from file");
+            } catch (Exception e) {
+                System.err.println("Error reloading original image: " + e.getMessage());
+            }
+        } else {
+            System.err.println("Cannot reset - source file not available");
         }
     }
 }

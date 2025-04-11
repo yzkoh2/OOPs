@@ -11,6 +11,7 @@ import java.awt.Image;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.event.ActionEvent;
+import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.WindowAdapter;
@@ -30,9 +31,13 @@ import javax.swing.JComboBox;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JMenu;
+import javax.swing.JMenuBar;
+import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.UIManager;
@@ -67,6 +72,9 @@ public class MainApplication {
     private JPanel statusPanel;
     private JLabel statusLabel;
     private JButton undoButton;
+    private JButton redoButton;
+    private JMenuItem undoMenuItem;
+    private JMenuItem redoMenuItem;
 
     // Application state
     private Photo currentPhoto;
@@ -75,7 +83,7 @@ public class MainApplication {
     private Rectangle cropRect;
     private boolean isCropping = false;
     
-    // History manager for undo operations
+    // History manager for undo/redo operations
     private PhotoHistory photoHistory;
 
     public static void main(String[] args) {
@@ -111,6 +119,10 @@ public class MainApplication {
         );
         mainFrame.setLocationRelativeTo(null);
 
+        // Create menu bar
+        JMenuBar menuBar = createMenuBar();
+        mainFrame.setJMenuBar(menuBar);
+
         // Add window close listener to save configuration
         mainFrame.addWindowListener(new WindowAdapter() {
             @Override
@@ -140,6 +152,68 @@ public class MainApplication {
         // Add main panel to frame
         mainFrame.setContentPane(mainPanel);
         mainFrame.setVisible(true);
+    }
+
+    private JMenuBar createMenuBar() {
+        JMenuBar menuBar = new JMenuBar();
+        
+        // File menu
+        JMenu fileMenu = new JMenu("File");
+        
+        JMenuItem openItem = new JMenuItem("Open");
+        openItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_O, KeyEvent.CTRL_DOWN_MASK));
+        openItem.addActionListener(this::handleOpenImage);
+        
+        JMenuItem saveItem = new JMenuItem("Save");
+        saveItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_S, KeyEvent.CTRL_DOWN_MASK));
+        saveItem.addActionListener(this::handleSaveImage);
+        
+        JMenuItem exitItem = new JMenuItem("Exit");
+        exitItem.addActionListener(e -> mainFrame.dispose());
+        
+        fileMenu.add(openItem);
+        fileMenu.add(saveItem);
+        fileMenu.addSeparator();
+        fileMenu.add(exitItem);
+        
+        // Edit menu
+        JMenu editMenu = new JMenu("Edit");
+        
+        undoMenuItem = new JMenuItem("Undo");
+        undoMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_Z, KeyEvent.CTRL_DOWN_MASK));
+        undoMenuItem.addActionListener(this::handleUndo);
+        undoMenuItem.setEnabled(false);
+        
+        redoMenuItem = new JMenuItem("Redo");
+        redoMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_Y, KeyEvent.CTRL_DOWN_MASK));
+        redoMenuItem.addActionListener(this::handleRedo);
+        redoMenuItem.setEnabled(false);
+        
+        JMenuItem cropItem = new JMenuItem("Crop");
+        cropItem.addActionListener(this::handleCrop);
+        
+        JMenuItem resizeItem = new JMenuItem("Resize to ID Format");
+        resizeItem.addActionListener(this::handleResize);
+        
+        JMenuItem removeBackgroundItem = new JMenuItem("Remove Background");
+        removeBackgroundItem.addActionListener(this::handleRemoveBackground);
+        
+        JMenuItem resetItem = new JMenuItem("Reset to Original");
+        resetItem.addActionListener(e -> handleReset());
+        
+        editMenu.add(undoMenuItem);
+        editMenu.add(redoMenuItem);
+        editMenu.addSeparator();
+        editMenu.add(cropItem);
+        editMenu.add(resizeItem);
+        editMenu.add(removeBackgroundItem);
+        editMenu.addSeparator();
+        editMenu.add(resetItem);
+        
+        menuBar.add(fileMenu);
+        menuBar.add(editMenu);
+        
+        return menuBar;
     }
 
     private JPanel createPreviewPanel() {
@@ -195,6 +269,27 @@ public class MainApplication {
         panel.add(filePanel);
         panel.add(Box.createRigidArea(new Dimension(0, 10)));
 
+        // Add history controls panel
+        JPanel historyPanel = new JPanel(new GridLayout(1, 2, 5, 5));
+        historyPanel.setBorder(BorderFactory.createTitledBorder("History"));
+        
+        // Add undo button
+        undoButton = new JButton("Undo");
+        undoButton.setToolTipText("Undo the last action (Ctrl+Z)");
+        undoButton.addActionListener(this::handleUndo);
+        undoButton.setEnabled(false); // Initially disabled until we have history
+        historyPanel.add(undoButton);
+        
+        // Add redo button
+        redoButton = new JButton("Redo");
+        redoButton.setToolTipText("Redo the last undone action (Ctrl+Y)");
+        redoButton.addActionListener(this::handleRedo);
+        redoButton.setEnabled(false); // Initially disabled until we have an undo
+        historyPanel.add(redoButton);
+        
+        panel.add(historyPanel);
+        panel.add(Box.createRigidArea(new Dimension(0, 10)));
+
         // Add edit controls
         JPanel editPanel = new JPanel(new GridLayout(0, 1, 5, 5));
         editPanel.setBorder(BorderFactory.createTitledBorder("Edit"));
@@ -210,12 +305,6 @@ public class MainApplication {
         JButton resizeButton = new JButton("Resize to ID Format");
         resizeButton.addActionListener(this::handleResize);
         editPanel.add(resizeButton);
-        
-        // Add undo button
-        undoButton = new JButton("Undo");
-        undoButton.addActionListener(this::handleUndo);
-        undoButton.setEnabled(false); // Initially disabled until we have history
-        editPanel.add(undoButton);
         
         // Add reset button
         JButton resetButton = new JButton("Reset to Original");
@@ -278,16 +367,53 @@ public class MainApplication {
         }
         
         // Restore the previous state
-        Photo previousState = photoHistory.undo();
+        Photo previousState = photoHistory.undo(currentPhoto);
         if (previousState != null) {
             currentPhoto = previousState;
             updatePreview();
             
-            // Update undo button state
-            undoButton.setEnabled(photoHistory.canUndo());
+            // Update undo/redo button states
+            updateUndoRedoButtons();
             
             statusLabel.setText("Undo completed");
         }
+    }
+    
+    /**
+     * Handle redo button click
+     */
+    private void handleRedo(ActionEvent e) {
+        if (!photoHistory.canRedo()) {
+            return;
+        }
+        
+        // Restore the next state
+        Photo nextState = photoHistory.redo(currentPhoto);
+        if (nextState != null) {
+            currentPhoto = nextState;
+            updatePreview();
+            
+            // Update undo/redo button states
+            updateUndoRedoButtons();
+            
+            statusLabel.setText("Redo completed");
+        }
+    }
+    
+    /**
+     * Updates the enabled state of undo/redo buttons based on history state
+     */
+    private void updateUndoRedoButtons() {
+        boolean canUndo = photoHistory.canUndo();
+        boolean canRedo = photoHistory.canRedo();
+        
+        // Update buttons
+        undoButton.setEnabled(canUndo);
+        redoButton.setEnabled(canRedo);
+        
+        // Update menu items
+        undoMenuItem.setEnabled(canUndo);
+        redoMenuItem.setEnabled(canRedo);
     }
 
     private void handleOpenImage(ActionEvent e) {
@@ -331,7 +457,7 @@ public class MainApplication {
                     
                     // Clear history when loading a new image
                     photoHistory.clear();
-                    undoButton.setEnabled(false);
+                    updateUndoRedoButtons(); // Update button states
                     
                     updatePreview();
                     statusLabel.setText("Image loaded: " + file.getName());
@@ -510,8 +636,8 @@ public class MainApplication {
                             get(); // Check for exceptions
                             updatePreview();
                             
-                            // Enable undo button
-                            undoButton.setEnabled(photoHistory.canUndo());
+                            // Update undo/redo buttons
+                            updateUndoRedoButtons();
                             
                             statusLabel.setText("Image cropped successfully");
                         } catch (Exception ex) {
@@ -609,7 +735,7 @@ public class MainApplication {
             return selectionRect;
         }
     }
-
+    
     private class SelectionPanel extends JPanel {
 
         private BufferedImage image;
@@ -705,8 +831,8 @@ public class MainApplication {
                     get(); // Check for exceptions
                     updatePreview();
                     
-                    // Enable undo button
-                    undoButton.setEnabled(photoHistory.canUndo());
+                    // Update undo/redo buttons
+                    updateUndoRedoButtons();
                     
                     statusLabel.setText("Background removed successfully");
                 } catch (Exception ex) {
@@ -769,8 +895,8 @@ public class MainApplication {
                     get(); // Check for exceptions
                     updatePreview();
                     
-                    // Enable undo button
-                    undoButton.setEnabled(photoHistory.canUndo());
+                    // Update undo/redo buttons
+                    updateUndoRedoButtons();
                     
                     statusLabel.setText("Image resized to ID photo dimensions");
                 } catch (InterruptedException | ExecutionException ex) {
@@ -821,8 +947,8 @@ public class MainApplication {
         currentPhoto.resetToOriginal();
         updatePreview();
         
-        // Enable undo button
-        undoButton.setEnabled(photoHistory.canUndo());
+        // Update undo/redo buttons
+        updateUndoRedoButtons();
         
         statusLabel.setText("Image reset to original");
     }

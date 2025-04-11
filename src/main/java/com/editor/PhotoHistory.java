@@ -5,10 +5,11 @@ import java.util.LinkedList;
 import java.util.Deque;
 
 /**
- * Manages a history of Photo states for implementing undo functionality
+ * Manages a history of Photo states for implementing undo/redo functionality
  */
 public class PhotoHistory {
-    private final Deque<Photo> history;
+    private final Deque<Photo> undoStack;
+    private final Deque<Photo> redoStack;
     private final int maxHistorySize;
     
     /**
@@ -23,12 +24,13 @@ public class PhotoHistory {
      * @param maxHistorySize Maximum number of history states to keep
      */
     public PhotoHistory(int maxHistorySize) {
-        this.history = new LinkedList<>();
+        this.undoStack = new LinkedList<>();
+        this.redoStack = new LinkedList<>();
         this.maxHistorySize = maxHistorySize;
     }
     
     /**
-     * Save a photo state to history
+     * Save a photo state to undo history
      * @param photo The photo to save (will be cloned)
      */
     public void saveState(Photo photo) {
@@ -39,39 +41,77 @@ public class PhotoHistory {
         // Create a deep copy of the photo to store in history
         Photo clonedPhoto = photo.clone();
         
-        // Add to history
-        history.push(clonedPhoto);
+        // Add to undo stack
+        undoStack.push(clonedPhoto);
+        
+        // Clear redo stack when a new action is performed
+        redoStack.clear();
         
         // Enforce maximum history size
-        while (history.size() > maxHistorySize) {
-            history.removeLast();
+        while (undoStack.size() > maxHistorySize) {
+            undoStack.removeLast();
         }
     }
     
     /**
-     * Restore the previous state
+     * Restore the previous state (undo)
+     * @param currentPhoto The current photo state to save for potential redo
      * @return The previous Photo state, or null if history is empty
      */
-    public Photo undo() {
-        if (history.isEmpty()) {
+    public Photo undo(Photo currentPhoto) {
+        if (!canUndo()) {
             return null;
         }
         
-        return history.pop();
+        // Save current state to redo stack
+        if (currentPhoto != null) {
+            redoStack.push(currentPhoto.clone());
+        }
+        
+        // Return the previous state
+        return undoStack.pop();
+    }
+    
+    /**
+     * Restore a previously undone state (redo)
+     * @param currentPhoto The current photo state to save in undo stack
+     * @return The next Photo state from redo stack, or null if redo stack is empty
+     */
+    public Photo redo(Photo currentPhoto) {
+        if (!canRedo()) {
+            return null;
+        }
+        
+        // Save current state to undo stack
+        if (currentPhoto != null) {
+            undoStack.push(currentPhoto.clone());
+        }
+        
+        // Return the next state
+        return redoStack.pop();
     }
     
     /**
      * Check if there are any states to undo
-     * @return true if there are states in history, false otherwise
+     * @return true if there are states in undo stack, false otherwise
      */
     public boolean canUndo() {
-        return !history.isEmpty();
+        return !undoStack.isEmpty();
     }
     
     /**
-     * Clear all history
+     * Check if there are any states to redo
+     * @return true if there are states in redo stack, false otherwise
+     */
+    public boolean canRedo() {
+        return !redoStack.isEmpty();
+    }
+    
+    /**
+     * Clear all history (both undo and redo stacks)
      */
     public void clear() {
-        history.clear();
+        undoStack.clear();
+        redoStack.clear();
     }
 }
