@@ -1,8 +1,13 @@
 package com.editor;
 
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
 import java.io.File;
 
+import javax.imageio.ImageIO;
+
 import org.bytedeco.javacv.Frame;
+import org.bytedeco.javacv.Java2DFrameConverter;
 import org.bytedeco.javacv.OpenCVFrameConverter;
 import org.bytedeco.opencv.global.opencv_imgcodecs;
 import org.bytedeco.opencv.opencv_core.Mat;
@@ -14,6 +19,7 @@ import com.entities.Photo;
 import com.util.FileUtils;
 
 public class ImageExporter {
+
     private final ExportSettings settings;
     private final OpenCVFrameConverter.ToMat converter = new OpenCVFrameConverter.ToMat();
 
@@ -24,24 +30,37 @@ public class ImageExporter {
     public File export(Photo photo, String outputPath) throws Exception {
         Frame frame = photo.getProcessedFrame();
 
-        // Convert to Mat for processing
-        Mat image = converter.convert(frame);
-
-        // Use the provided output path
-        File outputFile = new File(outputPath);
-
         // Ensure output directory exists
+        File outputFile = new File(outputPath);
         FileUtils.ensureDirectoryExists(outputFile.getParent());
 
-        // Save the image
-        if (settings.isGenerateMultiples()) {
-            // Create a grid of images
-            Mat gridImage = createImageGrid(image);
-            opencv_imgcodecs.imwrite(outputFile.getAbsolutePath(), gridImage);
-            gridImage.release();
+        Java2DFrameConverter java2DConverter = new Java2DFrameConverter();
+        BufferedImage image = java2DConverter.convert(frame);
+
+    
+        if (settings.getFormat() == ExportSettings.ImageFormat.JPEG) {
+            BufferedImage bgrImage = new BufferedImage(
+                    image.getWidth(), image.getHeight(), BufferedImage.TYPE_3BYTE_BGR
+            );
+            Graphics2D g = bgrImage.createGraphics();
+            g.drawImage(image, 0, 0, null);
+            g.dispose();
+            image = bgrImage;
+
+            // Save as JPEG
+            ImageIO.write(image, "jpg", outputFile);
         } else {
-            // Save single image
-            opencv_imgcodecs.imwrite(outputFile.getAbsolutePath(), image);
+            // Convert back to Mat if not JPEG
+            OpenCVFrameConverter.ToMat matConverter = new OpenCVFrameConverter.ToMat();
+            Mat imageMat = matConverter.convert(frame);
+
+            if (settings.isGenerateMultiples()) {
+                Mat gridImage = createImageGrid(imageMat);
+                opencv_imgcodecs.imwrite(outputFile.getAbsolutePath(), gridImage);
+                gridImage.release();
+            } else {
+                opencv_imgcodecs.imwrite(outputFile.getAbsolutePath(), imageMat);
+            }
         }
 
         return outputFile;

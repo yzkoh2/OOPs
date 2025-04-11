@@ -6,11 +6,11 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.FlowLayout; // Added for color preview
+import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.GridLayout;
 import java.awt.Image;
-import java.awt.Font;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.event.ActionEvent;
@@ -23,12 +23,36 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.concurrent.ExecutionException;
 
-import javax.swing.*; // Consolidated imports
+import javax.swing.BorderFactory; // Consolidated imports
+import javax.swing.Box;
+import javax.swing.BoxLayout;
+import javax.swing.ImageIcon;
+import javax.swing.JButton;
+import javax.swing.JCheckBox;
+import javax.swing.JColorChooser;
+import javax.swing.JComboBox;
+import javax.swing.JFileChooser;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JMenu;
+import javax.swing.JMenuBar;
+import javax.swing.JMenuItem;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTextField;
+import javax.swing.KeyStroke;
+import javax.swing.SwingUtilities;
+import javax.swing.SwingWorker;
+import javax.swing.UIManager;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.TitledBorder;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
 import org.bytedeco.javacv.Frame;
+import org.bytedeco.javacv.Java2DFrameConverter;
+import org.bytedeco.javacv.OpenCVFrameConverter;
+import org.bytedeco.opencv.opencv_core.Mat;
 import org.bytedeco.opencv.opencv_core.Rect;
 
 import com.config.ApplicationConfig;
@@ -41,7 +65,6 @@ import com.entities.ExportSettings;
 import com.entities.Photo;
 import com.util.Constants;
 import com.util.FileUtils;
-
 
 public class MainApplication {
 
@@ -61,6 +84,7 @@ public class MainApplication {
     private JTextField widthField;
     private JTextField heightField;
     private JLabel colorPreviewLabel; // To show selected background color
+    private Frame layoutSourceFrame;
 
     // Application state
     private Photo currentPhoto;
@@ -238,58 +262,58 @@ public class MainApplication {
                 TitledBorder.TOP
         ));
         panel.setPreferredSize(new Dimension(Constants.CONTROL_PANEL_WIDTH, -1));
-    
+
         // --- File Controls ---
         JPanel filePanel = new JPanel(new GridLayout(0, 1, 5, 5));
         filePanel.setBorder(BorderFactory.createTitledBorder("File"));
-    
+
         JButton openButton = new JButton("Open Image");
         openButton.addActionListener(this::handleOpenImage);
         filePanel.add(openButton);
-    
+
         JButton saveButton = new JButton("Save Image");
         saveButton.addActionListener(this::handleSaveImage);
         filePanel.add(saveButton);
-    
+
         panel.add(filePanel);
         panel.add(Box.createRigidArea(new Dimension(0, 10)));
-    
+
         // --- History Controls ---
         JPanel historyPanel = new JPanel(new GridLayout(1, 2, 5, 5));
         historyPanel.setBorder(BorderFactory.createTitledBorder("History"));
-    
+
         undoButton = new JButton("Undo");
         undoButton.setToolTipText("Undo the last action (Ctrl+Z)");
         undoButton.addActionListener(this::handleUndo);
         undoButton.setEnabled(false);
         historyPanel.add(undoButton);
-    
+
         redoButton = new JButton("Redo");
         redoButton.setToolTipText("Redo the last undone action (Ctrl+Y)");
         redoButton.addActionListener(this::handleRedo);
         redoButton.setEnabled(false);
         historyPanel.add(redoButton);
-    
+
         panel.add(historyPanel);
         panel.add(Box.createRigidArea(new Dimension(0, 10)));
-    
+
         // --- Edit Controls (Step 1) ---
         JPanel cropPanel = new JPanel(new GridLayout(0, 1, 5, 5));
         cropPanel.setBorder(BorderFactory.createTitledBorder("Step 1: Crop (Optional)"));
-    
+
         JButton cropButton = new JButton("Crop Image");
         cropButton.setToolTipText("Select a portion of the image to keep");
         cropButton.addActionListener(this::handleCrop);
         cropPanel.add(cropButton);
-    
+
         panel.add(cropPanel);
         panel.add(Box.createRigidArea(new Dimension(0, 10)));
-    
+
         // --- Background & Resize Settings (Step 2) ---
         JPanel processSettingsPanel = new JPanel();
         processSettingsPanel.setLayout(new BoxLayout(processSettingsPanel, BoxLayout.Y_AXIS));
         processSettingsPanel.setBorder(BorderFactory.createTitledBorder("Step 2: Configure Settings"));
-    
+
         // Dimension Inputs in millimeters
         JPanel dimensionPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         widthField = new JTextField(5);
@@ -306,47 +330,47 @@ public class MainApplication {
         dimensionPanel.add(new JLabel("Height (mm):"));
         dimensionPanel.add(heightField);
         processSettingsPanel.add(dimensionPanel);
-    
+
         // Background Color Chooser and Preview
         JPanel bgColorPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         JButton bgColorButton = new JButton("Choose Background Color");
         bgColorButton.addActionListener(this::handleChooseBackgroundColor);
-    
+
         colorPreviewLabel = new JLabel("  ");
         colorPreviewLabel.setOpaque(true);
         colorPreviewLabel.setBackground(backgroundSettings.getBackgroundColor());
         colorPreviewLabel.setBorder(BorderFactory.createLineBorder(Color.BLACK));
         colorPreviewLabel.setPreferredSize(new Dimension(20, 20));
-    
+
         bgColorPanel.add(bgColorButton);
         bgColorPanel.add(colorPreviewLabel);
         processSettingsPanel.add(bgColorPanel);
-    
+
         panel.add(processSettingsPanel);
         panel.add(Box.createRigidArea(new Dimension(0, 10)));
-    
+
         // --- Process Button (Step 3) ---
         JPanel processPanel = new JPanel(new GridLayout(0, 1, 5, 5));
         processPanel.setBorder(BorderFactory.createTitledBorder("Step 3: Process Image"));
-    
+
         JButton processButton = new JButton("Process Background & Resize");
         processButton.setFont(processButton.getFont().deriveFont(Font.BOLD));
         processButton.setToolTipText("Remove background, apply selected color, and resize to specified dimensions");
         processButton.addActionListener(this::handleProcessBackgroundAndResize);
         processPanel.add(processButton);
-    
+
         JButton resetButton = new JButton("Reset to Original");
         resetButton.setToolTipText("Discard all changes and restore the original image");
         resetButton.addActionListener(e -> handleReset());
         processPanel.add(resetButton);
-    
+
         panel.add(processPanel);
         panel.add(Box.createRigidArea(new Dimension(0, 10)));
-    
+
         // --- Export Settings (Step 4) ---
         JPanel exportPanel = new JPanel(new GridLayout(0, 1, 5, 5));
         exportPanel.setBorder(BorderFactory.createTitledBorder("Step 4: Export"));
-    
+
         JComboBox<String> formatComboBox = new JComboBox<>(Constants.SUPPORTED_OUTPUT_FORMATS);
         formatComboBox.setSelectedItem(exportSettings.getFormat().getExtension());
         formatComboBox.addActionListener(e -> {
@@ -359,26 +383,52 @@ public class MainApplication {
                 exportSettings.setFormat(ExportSettings.ImageFormat.BMP);
             }
         });
-    
+
         JPanel formatPanel = new JPanel(new BorderLayout());
         formatPanel.add(new JLabel("Format:"), BorderLayout.WEST);
         formatPanel.add(formatComboBox, BorderLayout.CENTER);
         exportPanel.add(formatPanel);
-    
+
         JCheckBox multipleCheckBox = new JCheckBox("Generate multiple copies", exportSettings.isGenerateMultiples());
         multipleCheckBox.addActionListener(e -> {
             exportSettings.setGenerateMultiples(multipleCheckBox.isSelected());
         });
         exportPanel.add(multipleCheckBox);
-    
+
         panel.add(exportPanel);
-    
+
+        // Add layout export options
+        String[] layoutOptions = {"1x1 (1 copy)", "2x2 (4 copies)", "4x6 (8 copies)", "3x4 (6 copies)"};
+        JComboBox<String> layoutDropdown = new JComboBox<>(layoutOptions);
+
+        JButton generateSheetButton = new JButton("Generate ID Photo Sheet");
+        generateSheetButton.addActionListener(e -> {
+            if (currentPhoto == null) {
+                JOptionPane.showMessageDialog(
+                        mainFrame,
+                        "No image loaded.",
+                        "Error",
+                        JOptionPane.ERROR_MESSAGE
+                );
+                return;
+            }
+
+            String selectedLayout = (String) layoutDropdown.getSelectedItem();
+            generateLayoutSheet(selectedLayout);
+        });
+
+        exportPanel.add(new JLabel("Layout:"));
+        exportPanel.add(layoutDropdown);
+        exportPanel.add(generateSheetButton);
+
         return panel;
     }
     // --- Event Handlers ---
 
     private void handleUndo(ActionEvent e) {
-        if (!photoHistory.canUndo()) { return; }
+        if (!photoHistory.canUndo()) {
+            return;
+        }
         Photo previousState = photoHistory.undo(currentPhoto);
         if (previousState != null) {
             currentPhoto = previousState;
@@ -389,12 +439,16 @@ public class MainApplication {
     }
 
     private void handleRedo(ActionEvent e) {
-        if (!photoHistory.canRedo()) { return; }
+        if (!photoHistory.canRedo()) {
+            return;
+        }
         Photo nextState = photoHistory.redo(currentPhoto);
         if (nextState != null) {
             currentPhoto = nextState;
             updatePreview();
             updateUndoRedoButtons();
+            layoutSourceFrame = currentPhoto.getProcessedFrame().clone();
+
             statusLabel.setText("Redo completed");
         }
     }
@@ -424,13 +478,20 @@ public class MainApplication {
         }
         statusLabel.setText("Loading image...");
         new SwingWorker<Photo, Void>() {
-            @Override protected Photo doInBackground() throws Exception { return FileUtils.loadPhoto(file); }
-            @Override protected void done() {
+            @Override
+            protected Photo doInBackground() throws Exception {
+                return FileUtils.loadPhoto(file);
+            }
+
+            @Override
+            protected void done() {
                 try {
                     currentPhoto = get();
                     photoHistory.clear(); // Clear history for new image
                     updateUndoRedoButtons();
                     updatePreview();
+                    layoutSourceFrame = currentPhoto.getProcessedFrame().clone();
+
                     statusLabel.setText("Image loaded: " + file.getName());
                 } catch (Exception ex) {
                     JOptionPane.showMessageDialog(mainFrame, "Error loading image: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
@@ -453,13 +514,17 @@ public class MainApplication {
             exportSettings.setOutputDirectory(fileChooser.getSelectedFile().getParent());
             statusLabel.setText("Saving image...");
             new SwingWorker<File, Void>() {
-                @Override protected File doInBackground() throws Exception {
+                @Override
+                protected File doInBackground() throws Exception {
                     ImageExporter exporter = new ImageExporter(exportSettings);
                     return exporter.export(currentPhoto, outputPath);
                 }
-                @Override protected void done() {
-                    try { statusLabel.setText("Image saved to: " + get().getAbsolutePath()); }
-                    catch (Exception ex) {
+
+                @Override
+                protected void done() {
+                    try {
+                        statusLabel.setText("Image saved to: " + get().getAbsolutePath());
+                    } catch (Exception ex) {
                         JOptionPane.showMessageDialog(mainFrame, "Error saving image: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
                         statusLabel.setText("Failed to save image");
                     }
@@ -473,57 +538,57 @@ public class MainApplication {
             JOptionPane.showMessageDialog(mainFrame, "No image loaded.", "Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
-    
+
         // Save state before cropping for undo capability
         photoHistory.saveState(currentPhoto);
-    
+
         // Get the current image
         BufferedImage image = currentPhoto.getProcessedBufferedImage();
-        
+
         // Calculate dimensions for the preview panel
         int maxWidth = 800, maxHeight = 600;
         double aspectRatio = (double) image.getWidth() / image.getHeight();
         int panelWidth = maxWidth;
         int panelHeight = (int) (maxWidth / aspectRatio);
-        
+
         if (panelHeight > maxHeight) {
             panelHeight = maxHeight;
             panelWidth = (int) (maxHeight * aspectRatio);
         }
-        
+
         // Create a scaled version for the UI
         Image scaledImage = image.getScaledInstance(panelWidth, panelHeight, Image.SCALE_SMOOTH);
         BufferedImage resizedImage = new BufferedImage(panelWidth, panelHeight, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g2d = resizedImage.createGraphics();
         g2d.drawImage(scaledImage, 0, 0, null);
         g2d.dispose();
-    
+
         // Calculate scale factors to map UI coordinates back to original image
         final double scaleX = (double) image.getWidth() / resizedImage.getWidth();
         final double scaleY = (double) image.getHeight() / resizedImage.getHeight();
-    
+
         // Create the crop selection panel
         CropPanel cropPanel = new CropPanel(resizedImage);
-        
+
         // Create a frame for the crop UI
         JFrame cropFrame = new JFrame("Crop Image - Click and drag to select area");
         cropFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         cropFrame.setLayout(new BorderLayout());
-        
+
         // Add buttons
         JPanel buttonPanel = new JPanel();
         JButton confirmButton = new JButton("Confirm Crop");
         JButton cancelButton = new JButton("Cancel");
         buttonPanel.add(confirmButton);
         buttonPanel.add(cancelButton);
-        
+
         // Assemble the frame
         cropFrame.add(new JScrollPane(cropPanel), BorderLayout.CENTER);
         cropFrame.add(buttonPanel, BorderLayout.SOUTH);
         cropFrame.pack();
         cropFrame.setLocationRelativeTo(mainFrame);
         cropFrame.setVisible(true);
-    
+
         // Handle the confirm button
         confirmButton.addActionListener(confirmEvent -> {
             Rectangle cropRect = cropPanel.getSelectionRectangle();
@@ -533,12 +598,12 @@ public class MainApplication {
                 int originalY = (int) (cropRect.y * scaleY);
                 int originalWidth = (int) (cropRect.width * scaleX);
                 int originalHeight = (int) (cropRect.height * scaleY);
-                
+
                 // Create a rectangle in original image coordinates
                 Rect originalRect = new Rect(originalX, originalY, originalWidth, originalHeight);
-                
+
                 statusLabel.setText("Cropping image...");
-                
+
                 // Process the crop in a background thread
                 new SwingWorker<Void, Void>() {
                     @Override
@@ -546,12 +611,12 @@ public class MainApplication {
                         try {
                             // Create an ImageResizer specifically for cropping
                             ImageResizer resizer = new ImageResizer(
-                                originalRect,  // Crop rectangle
-                                originalWidth, // Target is the cropped size
-                                originalHeight,
-                                false          // Exact crop (don't maintain aspect ratio)
+                                    originalRect, // Crop rectangle
+                                    originalWidth, // Target is the cropped size
+                                    originalHeight,
+                                    false // Exact crop (don't maintain aspect ratio)
                             );
-                            
+
                             // Apply the crop
                             resizer.process(currentPhoto);
                             return null;
@@ -559,37 +624,39 @@ public class MainApplication {
                             throw new Exception("Cropping failed: " + ex.getMessage(), ex);
                         }
                     }
-                    
+
                     @Override
                     protected void done() {
                         try {
                             get(); // Check for exceptions
                             updatePreview();
                             updateUndoRedoButtons();
+                            layoutSourceFrame = currentPhoto.getProcessedFrame().clone();
+
                             statusLabel.setText("Image cropped successfully");
                         } catch (Exception ex) {
                             JOptionPane.showMessageDialog(
-                                mainFrame, 
-                                "Error cropping image: " + ex.getMessage(), 
-                                "Error", 
-                                JOptionPane.ERROR_MESSAGE
+                                    mainFrame,
+                                    "Error cropping image: " + ex.getMessage(),
+                                    "Error",
+                                    JOptionPane.ERROR_MESSAGE
                             );
                             statusLabel.setText("Failed to crop image");
                         }
                     }
                 }.execute();
-                
+
                 cropFrame.dispose();
             } else {
                 JOptionPane.showMessageDialog(
-                    cropFrame, 
-                    "Please select a valid crop area.", 
-                    "Invalid Selection", 
-                    JOptionPane.WARNING_MESSAGE
+                        cropFrame,
+                        "Please select a valid crop area.",
+                        "Invalid Selection",
+                        JOptionPane.WARNING_MESSAGE
                 );
             }
         });
-        
+
         // Handle the cancel button
         cancelButton.addActionListener(cancelEvent -> cropFrame.dispose());
     }
@@ -597,80 +664,79 @@ public class MainApplication {
 // Updated handler for the Process Background and Resize button
 
 // Updated handler for the Process Background and Resize button
-
-private void handleProcessBackgroundAndResize(ActionEvent e) {
-    if (currentPhoto == null) {
-        JOptionPane.showMessageDialog(mainFrame, "No image loaded.", "Error", JOptionPane.ERROR_MESSAGE);
-        return;
-    }
-
-    // --- Get User Inputs (in millimeters) ---
-    int targetWidthMM, targetHeightMM;
-    try {
-        targetWidthMM = Integer.parseInt(widthField.getText().trim());
-        targetHeightMM = Integer.parseInt(heightField.getText().trim());
-        if (targetWidthMM <= 0 || targetHeightMM <= 0) {
-            throw new NumberFormatException("Dimensions must be positive.");
+    private void handleProcessBackgroundAndResize(ActionEvent e) {
+        if (currentPhoto == null) {
+            JOptionPane.showMessageDialog(mainFrame, "No image loaded.", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
         }
-    } catch (NumberFormatException ex) {
-        JOptionPane.showMessageDialog(mainFrame, 
-            "Invalid dimensions entered. Please enter positive numbers.", 
-            "Input Error", 
-            JOptionPane.ERROR_MESSAGE);
-        return;
-    }
-    
-    // Convert MM to pixels using the PIXELS_PER_MM constant
-    int targetWidth = targetWidthMM * Constants.PIXELS_PER_MM;
-    int targetHeight = targetHeightMM * Constants.PIXELS_PER_MM;
 
-    // --- Process in Background ---
-    photoHistory.saveState(currentPhoto); // Save state before combined action
-    statusLabel.setText("Processing background and resizing...");
-
-    SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>() {
-        @Override
-        protected Void doInBackground() throws Exception {
-            try {
-                // Step 1: Remove Background using the selected color from backgroundSettings
-                BackgroundRemover remover = new BackgroundRemover(
-                    backgroundSettings, 
-                    "model/modnet.onnx"
-                );
-                remover.process(currentPhoto);
-
-                // Step 2: Scale the result to user dimensions (maintaining aspect ratio)
-                ImageResizer resizer = new ImageResizer(
-                    targetWidth,
-                    targetHeight,
-                    true  // true = maintain aspect ratio (scale, don't crop)
-                );
-                resizer.process(currentPhoto);
-
-                return null;
-            } catch (Exception ex) {
-                throw new Exception("Processing failed: " + ex.getMessage(), ex);
+        // --- Get User Inputs (in millimeters) ---
+        int targetWidthMM, targetHeightMM;
+        try {
+            targetWidthMM = Integer.parseInt(widthField.getText().trim());
+            targetHeightMM = Integer.parseInt(heightField.getText().trim());
+            if (targetWidthMM <= 0 || targetHeightMM <= 0) {
+                throw new NumberFormatException("Dimensions must be positive.");
             }
+        } catch (NumberFormatException ex) {
+            JOptionPane.showMessageDialog(mainFrame,
+                    "Invalid dimensions entered. Please enter positive numbers.",
+                    "Input Error",
+                    JOptionPane.ERROR_MESSAGE);
+            return;
         }
 
-        @Override
-        protected void done() {
-            try {
-                get(); // Check for exceptions
-                updatePreview();
-                updateUndoRedoButtons();
-                statusLabel.setText("Background processed and image resized successfully");
-            } catch (InterruptedException | ExecutionException ex) {
-                JOptionPane.showMessageDialog(
-                    mainFrame,
-                    "Error during processing: " + ex.getCause().getMessage(),
-                    "Processing Error",
-                    JOptionPane.ERROR_MESSAGE
-                );
-                statusLabel.setText("Processing failed");
-                
-                // Optional: attempt to roll back on failure
-                /*
+        // Convert MM to pixels using the PIXELS_PER_MM constant
+        int targetWidth = targetWidthMM * Constants.PIXELS_PER_MM;
+        int targetHeight = targetHeightMM * Constants.PIXELS_PER_MM;
+
+        // --- Process in Background ---
+        photoHistory.saveState(currentPhoto); // Save state before combined action
+        statusLabel.setText("Processing background and resizing...");
+
+        SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>() {
+            @Override
+            protected Void doInBackground() throws Exception {
+                try {
+                    // Step 1: Remove Background using the selected color from backgroundSettings
+                    BackgroundRemover remover = new BackgroundRemover(
+                            backgroundSettings,
+                            "model/modnet.onnx"
+                    );
+                    remover.process(currentPhoto);
+
+                    // Step 2: Scale the result to user dimensions (maintaining aspect ratio)
+                    ImageResizer resizer = new ImageResizer(
+                            targetWidth,
+                            targetHeight,
+                            true // true = maintain aspect ratio (scale, don't crop)
+                    );
+                    resizer.process(currentPhoto);
+
+                    return null;
+                } catch (Exception ex) {
+                    throw new Exception("Processing failed: " + ex.getMessage(), ex);
+                }
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    get(); // Check for exceptions
+                    updatePreview();
+                    updateUndoRedoButtons();
+                    statusLabel.setText("Background processed and image resized successfully");
+                } catch (InterruptedException | ExecutionException ex) {
+                    JOptionPane.showMessageDialog(
+                            mainFrame,
+                            "Error during processing: " + ex.getCause().getMessage(),
+                            "Processing Error",
+                            JOptionPane.ERROR_MESSAGE
+                    );
+                    statusLabel.setText("Processing failed");
+
+                    // Optional: attempt to roll back on failure
+                    /*
                 try {
                     Photo previousState = photoHistory.undo(currentPhoto);
                     if (previousState != null) {
@@ -679,16 +745,123 @@ private void handleProcessBackgroundAndResize(ActionEvent e) {
                 } catch (Exception rollbackEx) {
                     // Silently handle rollback failure
                 }
-                */
-                
-                updatePreview();
-                updateUndoRedoButtons();
+                     */
+                    updatePreview();
+                    updateUndoRedoButtons();
+                }
             }
-        }
-    };
+        };
 
-    worker.execute();
-}
+        worker.execute();
+    }
+
+    private void generateLayoutSheet(String layoutOption) {
+        statusLabel.setText("Generating layout sheet...");
+    
+        SwingWorker<BufferedImage, Void> worker = new SwingWorker<BufferedImage, Void>() {
+            @Override
+            protected BufferedImage doInBackground() {
+                try {
+       
+                    OpenCVFrameConverter.ToMat matConverter = new OpenCVFrameConverter.ToMat();
+                    Java2DFrameConverter java2DConverter = new Java2DFrameConverter();
+    
+                    Mat bgrMat = matConverter.convert(layoutSourceFrame);
+                    Mat rgbMat = new Mat();
+    
+                    org.bytedeco.opencv.global.opencv_imgproc.cvtColor(
+                            bgrMat, rgbMat, org.bytedeco.opencv.global.opencv_imgproc.COLOR_BGR2RGB
+                    );
+    
+                    Frame rgbFrame = matConverter.convert(rgbMat);
+                    BufferedImage base = java2DConverter.convert(rgbFrame);
+    
+                    int idWidth = 300, idHeight = 400;
+                    int cols = 2, rows = 2;
+    
+                    switch (layoutOption) {
+                        case "4x6 (8 copies)":
+                            cols = 4;
+                            rows = 2;
+                            break;
+                        case "3x4 (6 copies)":
+                            cols = 3;
+                            rows = 2;
+                            break;
+                    }
+    
+                    int spacing = 20;
+                    int sheetWidth = cols * idWidth + (cols + 1) * spacing;
+                    int sheetHeight = rows * idHeight + (rows + 1) * spacing;
+    
+                    BufferedImage sheet = new BufferedImage(sheetWidth, sheetHeight, BufferedImage.TYPE_INT_RGB);
+                    Graphics2D g = sheet.createGraphics();
+                    g.setColor(Color.WHITE);
+                    g.fillRect(0, 0, sheetWidth, sheetHeight);
+    
+                    double imgAspect = (double) base.getWidth() / base.getHeight();
+                    double cellAspect = (double) idWidth / idHeight;
+    
+                    int drawWidth, drawHeight;
+                    if (imgAspect < cellAspect) {
+                        // Image is narrower — fit height, crop width
+                        drawHeight = idHeight;
+                        drawWidth = (int) (idHeight * imgAspect);
+                    } else {
+                        // Image is wider — fit width, crop height
+                        drawWidth = idWidth;
+                        drawHeight = (int) (idWidth / imgAspect);
+                    }
+    
+                    Image scaled = base.getScaledInstance(drawWidth, drawHeight, Image.SCALE_SMOOTH);
+    
+                    for (int r = 0; r < rows; r++) {
+                        for (int c = 0; c < cols; c++) {
+                            int x = spacing + c * (idWidth + spacing);
+                            int y = spacing + r * (idHeight + spacing);
+    
+                            int drawX = x + (idWidth - drawWidth) / 2;
+                            int drawY = y + (idHeight - drawHeight) / 2;
+    
+                            g.drawImage(scaled, drawX, drawY, null);
+                        }
+                    }
+    
+                    g.dispose();
+                    return sheet;
+    
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                    return null;
+                }
+            }
+    
+            @Override
+            protected void done() {
+                try {
+                    BufferedImage layout = get();
+                    if (layout != null) {
+                        Java2DFrameConverter converter = new Java2DFrameConverter();
+                        Frame sheetFrame = converter.convert(layout);
+                        currentPhoto.setProcessedFrame(sheetFrame);
+    
+                        updatePreview();
+                        updateUndoRedoButtons();
+                        statusLabel.setText("Layout sheet generated.");
+                    } else {
+                        statusLabel.setText("Failed to generate sheet.");
+                    }
+                } catch (Exception e) {
+                    statusLabel.setText("Error creating layout.");
+                    e.printStackTrace();
+                }
+            }
+        };
+    
+        worker.execute();
+    }
+    
+
     // --- Modified: Only chooses and stores color ---
     private void handleChooseBackgroundColor(ActionEvent e) {
         Color initialColor = backgroundSettings.getBackgroundColor();
@@ -706,11 +879,15 @@ private void handleProcessBackgroundAndResize(ActionEvent e) {
     }
 
     private void handleReset() {
-        if (currentPhoto == null) { return; }
+        if (currentPhoto == null) {
+            return;
+        }
         photoHistory.saveState(currentPhoto);
         currentPhoto.resetToOriginal();
         updatePreview();
         updateUndoRedoButtons();
+        layoutSourceFrame = currentPhoto.getProcessedFrame().clone();
+
         statusLabel.setText("Image reset to original");
     }
 
@@ -718,7 +895,8 @@ private void handleProcessBackgroundAndResize(ActionEvent e) {
         if (currentPhoto != null) {
             BufferedImage image = currentPhoto.getProcessedBufferedImage();
             int maxPreviewSize = Constants.PREVIEW_PANEL_WIDTH; // Use constant
-            int width = image.getWidth(); int height = image.getHeight();
+            int width = image.getWidth();
+            int height = image.getHeight();
             Image scaledImage = image; // Default to original if small enough
             if (width > maxPreviewSize || height > maxPreviewSize) {
                 double scale = Math.min((double) maxPreviewSize / width, (double) maxPreviewSize / height);
@@ -736,6 +914,7 @@ private void handleProcessBackgroundAndResize(ActionEvent e) {
 
     // --- Inner Class: CropPanel ---
     private class CropPanel extends JPanel {
+
         private BufferedImage image;
         private Rectangle selectionRect;
         private Point startPoint;
@@ -744,27 +923,46 @@ private void handleProcessBackgroundAndResize(ActionEvent e) {
             this.image = image;
             this.setPreferredSize(new Dimension(image.getWidth(), image.getHeight()));
             MouseAdapter mouseAdapter = new MouseAdapter() {
-                @Override public void mousePressed(MouseEvent e) { startPoint = e.getPoint(); selectionRect = null; repaint(); }
-                @Override public void mouseDragged(MouseEvent e) {
+                @Override
+                public void mousePressed(MouseEvent e) {
+                    startPoint = e.getPoint();
+                    selectionRect = null;
+                    repaint();
+                }
+
+                @Override
+                public void mouseDragged(MouseEvent e) {
                     if (startPoint != null) {
-                        int x = Math.min(startPoint.x, e.getX()); int y = Math.min(startPoint.y, e.getY());
-                        int w = Math.abs(e.getX() - startPoint.x); int h = Math.abs(e.getY() - startPoint.y);
-                        selectionRect = new Rectangle(x, y, w, h); repaint();
+                        int x = Math.min(startPoint.x, e.getX());
+                        int y = Math.min(startPoint.y, e.getY());
+                        int w = Math.abs(e.getX() - startPoint.x);
+                        int h = Math.abs(e.getY() - startPoint.y);
+                        selectionRect = new Rectangle(x, y, w, h);
+                        repaint();
                     }
                 }
             };
-            addMouseListener(mouseAdapter); addMouseMotionListener(mouseAdapter);
+            addMouseListener(mouseAdapter);
+            addMouseMotionListener(mouseAdapter);
         }
-        @Override protected void paintComponent(Graphics g) {
+
+        @Override
+        protected void paintComponent(Graphics g) {
             super.paintComponent(g);
             g.drawImage(image, 0, 0, null);
             if (selectionRect != null) {
                 Graphics2D g2d = (Graphics2D) g;
-                g2d.setColor(new Color(0, 120, 215, 128)); g2d.fillRect(selectionRect.x, selectionRect.y, selectionRect.width, selectionRect.height);
-                g2d.setColor(Color.BLUE); g2d.setStroke(new BasicStroke(2)); g2d.drawRect(selectionRect.x, selectionRect.y, selectionRect.width, selectionRect.height);
+                g2d.setColor(new Color(0, 120, 215, 128));
+                g2d.fillRect(selectionRect.x, selectionRect.y, selectionRect.width, selectionRect.height);
+                g2d.setColor(Color.BLUE);
+                g2d.setStroke(new BasicStroke(2));
+                g2d.drawRect(selectionRect.x, selectionRect.y, selectionRect.width, selectionRect.height);
             }
         }
-        public Rectangle getSelectionRectangle() { return selectionRect; }
+
+        public Rectangle getSelectionRectangle() {
+            return selectionRect;
+        }
     }
 
     // Removed unused SelectionPanel class if it existed
