@@ -11,7 +11,7 @@ public class Constants {
     public static final int DEFAULT_WINDOW_WIDTH = 1024;
     public static final int DEFAULT_WINDOW_HEIGHT = 768;
     public static final int PREVIEW_PANEL_WIDTH = 400;
-    public static final int CONTROL_PANEL_WIDTH = 250;
+    public static final int CONTROL_PANEL_WIDTH = 550;
     
     // ID photo standard dimensions (in pixels at 300 DPI)
     public static final int PASSPORT_PHOTO_WIDTH_MM = 35;  // 35mm

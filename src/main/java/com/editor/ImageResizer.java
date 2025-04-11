@@ -137,4 +137,5 @@ public class ImageResizer implements ImageProcessor {
         
         return outputFrame;
     }
+
 }

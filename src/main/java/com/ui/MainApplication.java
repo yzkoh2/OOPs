@@ -1,19 +1,19 @@
-// File: OOP/src/main/java/com/ui/MainApplication.java
 package com.ui;
 
 import java.awt.BasicStroke;
 import java.awt.BorderLayout;
+import java.awt.GridLayout;
 import java.awt.Color;
 import java.awt.Dimension;
-import java.awt.FlowLayout; // Added for color preview
+import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
-import java.awt.GridLayout;
 import java.awt.Image;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -23,9 +23,10 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.concurrent.ExecutionException;
 
-import javax.swing.BorderFactory; // Consolidated imports
+import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
+import javax.swing.ButtonGroup;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
@@ -40,6 +41,7 @@ import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JRadioButton;
 import javax.swing.JScrollPane;
 import javax.swing.JTextField;
 import javax.swing.KeyStroke;
@@ -79,18 +81,26 @@ public class MainApplication {
     private JFrame cropFrame;
     private JPanel mainPanel;
     private JLabel previewLabel;
-    private JPanel controlPanel;
+    private JScrollPane controlPanel;
     private JPanel statusPanel;
     private JLabel statusLabel;
     private JButton undoButton;
     private JButton redoButton;
     private JMenuItem undoMenuItem;
     private JMenuItem redoMenuItem;
+    
     // New UI components for dimensions and color preview
     private JTextField widthField;
     private JTextField heightField;
     private JLabel colorPreviewLabel; // To show selected background color
     private Frame layoutSourceFrame;
+
+    // New UI components for background image feature
+    private JRadioButton solidColorRadio;
+    private JRadioButton imageBackgroundRadio;
+    private JButton backgroundImageButton;
+    private JLabel backgroundImagePreview;
+    private String selectedBackgroundImagePath;
 
     // Application state
     private Photo currentPhoto;
@@ -125,7 +135,7 @@ public class MainApplication {
         ApplicationConfig config = ApplicationConfig.getInstance();
 
         // Initialize settings
-        backgroundSettings = new BackgroundSettings(); // BackgroundSettings stores the chosen color
+        backgroundSettings = new BackgroundSettings(); // BackgroundSettings stores the chosen color/image
         exportSettings = new ExportSettings();
 
         // Initialize photo history
@@ -222,7 +232,7 @@ public class MainApplication {
 
         // Renamed for clarity
         JMenuItem processBackgroundItem = new JMenuItem("Process Background & Resize");
-        processBackgroundItem.addActionListener(this::handleProcessBackgroundAndResize); // Changed handler
+        processBackgroundItem.addActionListener(this::handleProcessBackgroundAndResize);
 
         JMenuItem resetItem = new JMenuItem("Reset to Original");
         resetItem.addActionListener(e -> handleReset());
@@ -231,9 +241,7 @@ public class MainApplication {
         editMenu.add(redoMenuItem);
         editMenu.addSeparator();
         editMenu.add(cropItem);
-        // editMenu.add(resizeItem); // Removed old resize item
-        editMenu.add(processBackgroundItem); // Added combined item
-        // editMenu.add(removeBackgroundItem); // Removed old background item
+        editMenu.add(processBackgroundItem);
         editMenu.addSeparator();
         editMenu.add(resetItem);
 
@@ -270,7 +278,7 @@ public class MainApplication {
         return panel;
     }
 
-    private JPanel createControlPanel() {
+    private JScrollPane createControlPanel() {
         JPanel panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
         panel.setBorder(BorderFactory.createTitledBorder(
@@ -354,23 +362,18 @@ public class MainApplication {
         dimensionPanel.add(heightField);
         processSettingsPanel.add(dimensionPanel);
 
-        // Background Color Chooser and Preview
-        JPanel bgColorPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        JButton bgColorButton = new JButton("Choose Background Color");
-        bgColorButton.addActionListener(this::handleChooseBackgroundColor);
+        // Add the new background panel
+        JPanel backgroundPanel = createBackgroundPanel();
+        processSettingsPanel.add(backgroundPanel);
 
-        colorPreviewLabel = new JLabel("  ");
-        colorPreviewLabel.setOpaque(true);
-        colorPreviewLabel.setBackground(backgroundSettings.getBackgroundColor());
-        colorPreviewLabel.setBorder(BorderFactory.createLineBorder(Color.BLACK));
-        colorPreviewLabel.setPreferredSize(new Dimension(20, 20));
-
-        bgColorPanel.add(bgColorButton);
-        bgColorPanel.add(colorPreviewLabel);
-        processSettingsPanel.add(bgColorPanel);
-
-        panel.add(processSettingsPanel);
-        panel.add(Box.createRigidArea(new Dimension(0, 10)));
+        JScrollPane settingsScrollPane = new JScrollPane(processSettingsPanel);
+        settingsScrollPane.setBorder(BorderFactory.createTitledBorder("Step 2: Configure Settings"));
+        settingsScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+        settingsScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        settingsScrollPane.getVerticalScrollBar().setUnitIncrement(16); // Smoother scrolling
+        
+        // Add the scrollPane to your main panel
+        panel.add(settingsScrollPane);
 
         // --- Process Button (Step 3) ---
         JPanel processPanel = new JPanel(new GridLayout(0, 1, 5, 5));
@@ -378,7 +381,7 @@ public class MainApplication {
 
         JButton processButton = new JButton("Process Background & Resize");
         processButton.setFont(processButton.getFont().deriveFont(Font.BOLD));
-        processButton.setToolTipText("Remove background, apply selected color, and resize to specified dimensions");
+        processButton.setToolTipText("Remove background, apply selected color/image, and resize to specified dimensions");
         processButton.addActionListener(this::handleProcessBackgroundAndResize);
         processPanel.add(processButton);
 
@@ -444,7 +447,175 @@ public class MainApplication {
         exportPanel.add(layoutDropdown);
         exportPanel.add(generateSheetButton);
 
-        return panel;
+// In createControlPanel() method, modify the return statement:
+JScrollPane scrollablePanel = new JScrollPane(panel);
+scrollablePanel.setPreferredSize(new Dimension(Constants.CONTROL_PANEL_WIDTH, -1));
+scrollablePanel.getVerticalScrollBar().setUnitIncrement(16);
+return scrollablePanel;
+    }
+    
+    // New method for creating the background panel with options for both color and image
+    private JPanel createBackgroundPanel() {
+        JPanel bgPanel = new JPanel();
+        bgPanel.setLayout(new BoxLayout(bgPanel, BoxLayout.Y_AXIS));
+        bgPanel.setBorder(BorderFactory.createTitledBorder("Background Settings"));
+        
+        // Background type selection
+        JPanel typePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        ButtonGroup bgTypeGroup = new ButtonGroup();
+        
+        solidColorRadio = new JRadioButton("Solid Color");
+        imageBackgroundRadio = new JRadioButton("Image Background");
+        
+        // Set initial selection based on current settings
+        if (backgroundSettings.getType() == BackgroundSettings.BackgroundType.SOLID_COLOR) {
+            solidColorRadio.setSelected(true);
+        } else {
+            imageBackgroundRadio.setSelected(true);
+        }
+        
+        // Add listeners to update the background type
+        solidColorRadio.addActionListener(e -> {
+            backgroundSettings.setType(BackgroundSettings.BackgroundType.SOLID_COLOR);
+            updateBackgroundControlsState();
+        });
+        
+        imageBackgroundRadio.addActionListener(e -> {
+            backgroundSettings.setType(BackgroundSettings.BackgroundType.CUSTOM_IMAGE);
+            updateBackgroundControlsState();
+        });
+        
+        bgTypeGroup.add(solidColorRadio);
+        bgTypeGroup.add(imageBackgroundRadio);
+        
+        typePanel.add(solidColorRadio);
+        typePanel.add(imageBackgroundRadio);
+        bgPanel.add(typePanel);
+        
+        // Solid color controls
+        JPanel colorPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        JButton bgColorButton = new JButton("Choose Background Color");
+        bgColorButton.addActionListener(this::handleChooseBackgroundColor);
+        
+        colorPreviewLabel = new JLabel("  ");
+        colorPreviewLabel.setOpaque(true);
+        colorPreviewLabel.setBackground(backgroundSettings.getBackgroundColor());
+        colorPreviewLabel.setBorder(BorderFactory.createLineBorder(Color.BLACK));
+        colorPreviewLabel.setPreferredSize(new Dimension(20, 20));
+        
+        colorPanel.add(bgColorButton);
+        colorPanel.add(colorPreviewLabel);
+        bgPanel.add(colorPanel);
+        
+        // Background image controls
+        JPanel imagePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        backgroundImageButton = new JButton("Select Background Image");
+        backgroundImageButton.addActionListener(this::handleChooseBackgroundImage);
+        
+        // Preview thumbnail
+        backgroundImagePreview = new JLabel("No image selected");
+        backgroundImagePreview.setPreferredSize(new Dimension(100, 60));
+        backgroundImagePreview.setBorder(BorderFactory.createLineBorder(Color.GRAY));
+        
+        // If image path is already set, try to load and show a preview
+        if (backgroundSettings.getBackgroundImagePath() != null && 
+            !backgroundSettings.getBackgroundImagePath().isEmpty()) {
+            try {
+                File imgFile = new File(backgroundSettings.getBackgroundImagePath());
+                if (imgFile.exists()) {
+                    selectedBackgroundImagePath = backgroundSettings.getBackgroundImagePath();
+                    updateBackgroundImagePreview();
+                }
+            } catch (Exception ex) {
+                // Ignore errors and keep default "No image selected" text
+            }
+        }
+        
+        imagePanel.add(backgroundImageButton);
+        imagePanel.add(backgroundImagePreview);
+        bgPanel.add(imagePanel);
+        
+        // Update which controls are enabled based on current type
+        updateBackgroundControlsState();
+        
+        return bgPanel;
+    }
+    
+    // Update control states based on background type
+    private void updateBackgroundControlsState() {
+        boolean isColorType = backgroundSettings.getType() == BackgroundSettings.BackgroundType.SOLID_COLOR;
+        
+        // Update UI controls based on selected type
+        colorPreviewLabel.setEnabled(isColorType);
+        backgroundImageButton.setEnabled(!isColorType);
+        backgroundImagePreview.setEnabled(!isColorType);
+    }
+
+    // Add this method to handle choosing a background image
+    private void handleChooseBackgroundImage(ActionEvent e) {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("Select Background Image");
+        fileChooser.setFileFilter(new FileNameExtensionFilter(
+                "Image files", Constants.SUPPORTED_INPUT_FORMATS));
+        
+        if (fileChooser.showOpenDialog(mainFrame) == JFileChooser.APPROVE_OPTION) {
+            File selectedFile = fileChooser.getSelectedFile();
+            if (FileUtils.isImageFile(selectedFile)) {
+                selectedBackgroundImagePath = selectedFile.getAbsolutePath();
+                backgroundSettings.setBackgroundImagePath(selectedBackgroundImagePath);
+                updateBackgroundImagePreview();
+                statusLabel.setText("Background image selected: " + selectedFile.getName());
+            } else {
+                JOptionPane.showMessageDialog(mainFrame,
+                        "Selected file is not a supported image format.",
+                        "Invalid File", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+
+    // Add this method to update the background image preview
+    private void updateBackgroundImagePreview() {
+        if (selectedBackgroundImagePath != null && !selectedBackgroundImagePath.isEmpty()) {
+            try {
+                // Load the image
+                File imgFile = new File(selectedBackgroundImagePath);
+                if (imgFile.exists()) {
+                    // Load and scale the image for preview
+                    BufferedImage originalImg = javax.imageio.ImageIO.read(imgFile);
+                    
+                    // Create scaled version
+                    int maxPreviewWidth = 80;
+                    int maxPreviewHeight = 50;
+                    double aspectRatio = (double) originalImg.getWidth() / originalImg.getHeight();
+                    
+                    int previewWidth = maxPreviewWidth;
+                    int previewHeight = (int) (previewWidth / aspectRatio);
+                    
+                    if (previewHeight > maxPreviewHeight) {
+                        previewHeight = maxPreviewHeight;
+                        previewWidth = (int) (previewHeight * aspectRatio);
+                    }
+                    
+                    // Create a scaled preview
+                    Image scaledImg = originalImg.getScaledInstance(
+                            previewWidth, previewHeight, Image.SCALE_SMOOTH);
+                    backgroundImagePreview.setIcon(new ImageIcon(scaledImg));
+                    backgroundImagePreview.setText("");
+                    
+                    // Update settings
+                    backgroundSettings.setBackgroundImagePath(selectedBackgroundImagePath);
+                }
+            } catch (Exception ex) {
+                backgroundImagePreview.setIcon(null);
+                backgroundImagePreview.setText("Error loading image");
+                System.err.println("Error creating preview: " + ex.getMessage());
+            }
+        } else {
+            backgroundImagePreview.setIcon(null);
+            backgroundImagePreview.setText("No image selected");
+        }
+        backgroundImagePreview.revalidate();
+        backgroundImagePreview.repaint();
     }
     
     // --- Event Handlers ---
@@ -594,667 +765,778 @@ public class MainApplication {
         // Create the crop selection panel
         CropPanel cropPanel = new CropPanel(resizedImage);
 
-        // Create a frame for the crop UI
-        JFrame cropFrame = new JFrame("Crop Image - Click and drag to select area");
-        cropFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-        cropFrame.setLayout(new BorderLayout());
+// Create a frame for the crop UI
+JFrame cropFrame = new JFrame("Crop Image - Click and drag to select area");
+cropFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+cropFrame.setLayout(new BorderLayout());
 
-        // Add buttons
-        JPanel buttonPanel = new JPanel();
-        JButton confirmButton = new JButton("Confirm Crop");
-        JButton cancelButton = new JButton("Cancel");
-        buttonPanel.add(confirmButton);
-        buttonPanel.add(cancelButton);
+// Add buttons
+JPanel buttonPanel = new JPanel();
+JButton confirmButton = new JButton("Confirm Crop");
+JButton cancelButton = new JButton("Cancel");
+buttonPanel.add(confirmButton);
+buttonPanel.add(cancelButton);
 
-        // Assemble the frame
-        cropFrame.add(new JScrollPane(cropPanel), BorderLayout.CENTER);
-        cropFrame.add(buttonPanel, BorderLayout.SOUTH);
-        cropFrame.pack();
-        cropFrame.setLocationRelativeTo(mainFrame);
-        cropFrame.setVisible(true);
+// Assemble the frame
+cropFrame.add(new JScrollPane(cropPanel), BorderLayout.CENTER);
+cropFrame.add(buttonPanel, BorderLayout.SOUTH);
+cropFrame.pack();
+cropFrame.setLocationRelativeTo(mainFrame);
+cropFrame.setVisible(true);
 
-        // Handle the confirm button
-        confirmButton.addActionListener(confirmEvent -> {
-            Rectangle cropRect = cropPanel.getSelectionRectangle();
-            if (cropRect != null && cropRect.width > 10 && cropRect.height > 10) {
-                // Map selection coordinates back to original image
-                int originalX = (int) (cropRect.x * scaleX);
-                int originalY = (int) (cropRect.y * scaleY);
-                int originalWidth = (int) (cropRect.width * scaleX);
-                int originalHeight = (int) (cropRect.height * scaleY);
+// Handle the confirm button
+confirmButton.addActionListener(confirmEvent -> {
+    Rectangle cropRect = cropPanel.getSelectionRectangle();
+    if (cropRect != null && cropRect.width > 10 && cropRect.height > 10) {
+        // Map selection coordinates back to original image
+        int originalX = (int) (cropRect.x * scaleX);
+        int originalY = (int) (cropRect.y * scaleY);
+        int originalWidth = (int) (cropRect.width * scaleX);
+        int originalHeight = (int) (cropRect.height * scaleY);
 
-                // Create a rectangle in original image coordinates
-                Rect originalRect = new Rect(originalX, originalY, originalWidth, originalHeight);
+        // Create a rectangle in original image coordinates
+        Rect originalRect = new Rect(originalX, originalY, originalWidth, originalHeight);
 
-                statusLabel.setText("Cropping image...");
+        statusLabel.setText("Cropping image...");
 
-                // Process the crop in a background thread
-                new SwingWorker<Void, Void>() {
-                    @Override
-                    protected Void doInBackground() throws Exception {
-                        try {
-                            // Create an ImageResizer specifically for cropping
-                            ImageResizer resizer = new ImageResizer(
-                                    originalRect, // Crop rectangle
-                                    originalWidth, // Target is the cropped size
-                                    originalHeight,
-                                    false // Exact crop (don't maintain aspect ratio)
-                            );
-
-                            // Apply the crop
-                            resizer.process(currentPhoto);
-                            return null;
-                        } catch (Exception ex) {
-                            throw new Exception("Cropping failed: " + ex.getMessage(), ex);
-                        }
-                    }
-
-                    @Override
-                    protected void done() {
-                        try {
-                            get(); // Check for exceptions
-                            updatePreview();
-                            updateUndoRedoButtons();
-                            layoutSourceFrame = currentPhoto.getProcessedFrame().clone();
-
-                            statusLabel.setText("Image cropped successfully");
-                        } catch (Exception ex) {
-                            JOptionPane.showMessageDialog(
-                                    mainFrame,
-                                    "Error cropping image: " + ex.getMessage(),
-                                    "Error",
-                                    JOptionPane.ERROR_MESSAGE
-                            );
-                            statusLabel.setText("Failed to crop image");
-                        }
-                    }
-                }.execute();
-
-                cropFrame.dispose();
-            } else {
-                JOptionPane.showMessageDialog(
-                        cropFrame,
-                        "Please select a valid crop area.",
-                        "Invalid Selection",
-                        JOptionPane.WARNING_MESSAGE
-                );
-            }
-        });
-
-        // Handle the cancel button
-        cancelButton.addActionListener(cancelEvent -> cropFrame.dispose());
-    }
-    // --- NEW Combined Handler for Background Removal and Resizing ---
-// Updated handler for the Process Background and Resize button
-
-// Updated handler for the Process Background and Resize button
-private void handleProcessBackgroundAndResize(ActionEvent e) {
-    if (currentPhoto == null) {
-        JOptionPane.showMessageDialog(mainFrame, "No image loaded.", "Error", JOptionPane.ERROR_MESSAGE);
-        return;
-    }
-
-    // --- Get User Inputs (in millimeters) ---
-    int targetWidthMM, targetHeightMM;
-    try {
-        targetWidthMM = Integer.parseInt(widthField.getText().trim());
-        targetHeightMM = Integer.parseInt(heightField.getText().trim());
-        if (targetWidthMM <= 0 || targetHeightMM <= 0) {
-            throw new NumberFormatException("Dimensions must be positive.");
-        }
-    } catch (NumberFormatException ex) {
-        JOptionPane.showMessageDialog(mainFrame,
-                "Invalid dimensions entered. Please enter positive numbers.",
-                "Input Error",
-                JOptionPane.ERROR_MESSAGE);
-        return;
-    }
-
-    // Convert MM to pixels using the PIXELS_PER_MM constant
-    int targetWidth = targetWidthMM * Constants.PIXELS_PER_MM;
-    int targetHeight = targetHeightMM * Constants.PIXELS_PER_MM;
-
-    // --- Process in Background ---
-    photoHistory.saveState(currentPhoto); // Save state before combined action
-    statusLabel.setText("Processing background and resizing...");
-
-    SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>() {
-        @Override
-        protected Void doInBackground() throws Exception {
-            try {
-                // Step 1: Remove Background using the selected color from backgroundSettings
-                BackgroundRemover remover = new BackgroundRemover(
-                        backgroundSettings,
-                        "model/modnet.onnx"
-                );
-                remover.process(currentPhoto);
-
-                // Step 2: Scale the result to user dimensions (maintaining aspect ratio)
-                // Pass the background color to use for padding
-                ImageResizer resizer = new ImageResizer(
-                        targetWidth,
-                        targetHeight,
-                        true, // true = maintain aspect ratio (scale, don't crop)
-                        backgroundSettings.getBackgroundColor() // Use the selected background color for padding
-                );
-                resizer.process(currentPhoto);
-
-                return null;
-            } catch (Exception ex) {
-                throw new Exception("Processing failed: " + ex.getMessage(), ex);
-            }
-        }
-
-        @Override
-        protected void done() {
-            try {
-                get(); // Check for exceptions
-                updatePreview();
-                updateUndoRedoButtons();
-                layoutSourceFrame = currentPhoto.getProcessedFrame().clone();
-                statusLabel.setText("Background processed and image resized successfully");
-            } catch (InterruptedException | ExecutionException ex) {
-                JOptionPane.showMessageDialog(
-                        mainFrame,
-                        "Error during processing: " + ex.getCause().getMessage(),
-                        "Processing Error",
-                        JOptionPane.ERROR_MESSAGE
-                );
-                statusLabel.setText("Processing failed");
-
-                updatePreview();
-                updateUndoRedoButtons();
-            }
-        }
-    };
-
-    worker.execute();
-}
-    
-    private void generateLayoutSheet(String layoutOption) {
-        statusLabel.setText("Generating layout sheet...");
-
-        SwingWorker<BufferedImage, Void> worker = new SwingWorker<BufferedImage, Void>() {
+        // Process the crop in a background thread
+        new SwingWorker<Void, Void>() {
             @Override
-            protected BufferedImage doInBackground() {
+            protected Void doInBackground() throws Exception {
                 try {
-
-                    OpenCVFrameConverter.ToMat matConverter = new OpenCVFrameConverter.ToMat();
-                    Java2DFrameConverter java2DConverter = new Java2DFrameConverter();
-
-                    Mat bgrMat = matConverter.convert(layoutSourceFrame);
-                    Mat rgbMat = new Mat();
-
-                    org.bytedeco.opencv.global.opencv_imgproc.cvtColor(
-                            bgrMat, rgbMat, org.bytedeco.opencv.global.opencv_imgproc.COLOR_BGR2RGB
+                    // Create an ImageResizer specifically for cropping
+                    ImageResizer resizer = new ImageResizer(
+                            originalRect, // Crop rectangle
+                            originalWidth, // Target is the cropped size
+                            originalHeight,
+                            false // Exact crop (don't maintain aspect ratio)
                     );
 
-                    Frame rgbFrame = matConverter.convert(rgbMat);
-                    BufferedImage base = java2DConverter.convert(rgbFrame);
-
-                    int idWidth = 300, idHeight = 400;
-                    int cols = 2, rows = 2;
-
-                    switch (layoutOption) {
-                        case "1x1 (1 copy)":
-                            cols = 1;
-                            rows = 1;
-                            break;
-                        case "4x6 (8 copies)":
-                            cols = 4;
-                            rows = 2;
-                            break;
-                        case "3x4 (6 copies)":
-                            cols = 3;
-                            rows = 2;
-                            break;
-                    }
-
-                    int spacing = 20;
-                    int sheetWidth = cols * idWidth + (cols + 1) * spacing;
-                    int sheetHeight = rows * idHeight + (rows + 1) * spacing;
-
-                    BufferedImage sheet = new BufferedImage(sheetWidth, sheetHeight, BufferedImage.TYPE_INT_RGB);
-                    Graphics2D g = sheet.createGraphics();
-                    g.setColor(Color.WHITE);
-                    g.fillRect(0, 0, sheetWidth, sheetHeight);
-
-                    double imgAspect = (double) base.getWidth() / base.getHeight();
-                    double cellAspect = (double) idWidth / idHeight;
-
-                    int drawWidth, drawHeight;
-                    if (imgAspect < cellAspect) {
-                        // Image is narrower — fit height, crop width
-                        drawHeight = idHeight;
-                        drawWidth = (int) (idHeight * imgAspect);
-                    } else {
-                        // Image is wider — fit width, crop height
-                        drawWidth = idWidth;
-                        drawHeight = (int) (idWidth / imgAspect);
-                    }
-
-                    Image scaled = base.getScaledInstance(drawWidth, drawHeight, Image.SCALE_SMOOTH);
-
-                    for (int r = 0; r < rows; r++) {
-                        for (int c = 0; c < cols; c++) {
-                            int x = spacing + c * (idWidth + spacing);
-                            int y = spacing + r * (idHeight + spacing);
-
-                            int drawX = x + (idWidth - drawWidth) / 2;
-                            int drawY = y + (idHeight - drawHeight) / 2;
-
-                            g.drawImage(scaled, drawX, drawY, null);
-                        }
-                    }
-
-                    g.dispose();
-                    return sheet;
-
-                } catch (Exception ex) {
-                    ex.printStackTrace();
+                    // Apply the crop
+                    resizer.process(currentPhoto);
                     return null;
+                } catch (Exception ex) {
+                    throw new Exception("Cropping failed: " + ex.getMessage(), ex);
                 }
             }
 
             @Override
             protected void done() {
                 try {
-                    BufferedImage layout = get();
-                    if (layout != null) {
-                        Java2DFrameConverter converter = new Java2DFrameConverter();
-                        Frame sheetFrame = converter.convert(layout);
-                        currentPhoto.setProcessedFrame(sheetFrame);
+                    get(); // Check for exceptions
+                    updatePreview();
+                    updateUndoRedoButtons();
+                    layoutSourceFrame = currentPhoto.getProcessedFrame().clone();
 
-                        updatePreview();
-                        updateUndoRedoButtons();
-                        statusLabel.setText("Layout sheet generated.");
-                    } else {
-                        statusLabel.setText("Failed to generate sheet.");
-                    }
-                } catch (Exception e) {
-                    statusLabel.setText("Error creating layout.");
-                    e.printStackTrace();
+                    statusLabel.setText("Image cropped successfully");
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(
+                            mainFrame,
+                            "Error cropping image: " + ex.getMessage(),
+                            "Error",
+                            JOptionPane.ERROR_MESSAGE
+                    );
+                    statusLabel.setText("Failed to crop image");
                 }
             }
-        };
+        }.execute();
 
-        worker.execute();
+        cropFrame.dispose();
+    } else {
+        JOptionPane.showMessageDialog(
+                cropFrame,
+                "Please select a valid crop area.",
+                "Invalid Selection",
+                JOptionPane.WARNING_MESSAGE
+        );
     }
+});
 
-    // --- Modified: Only chooses and stores color ---
-    private void handleChooseBackgroundColor(ActionEvent e) {
-        Color initialColor = backgroundSettings.getBackgroundColor();
-        Color selectedColor = JColorChooser.showDialog(mainFrame, "Choose Background Color", initialColor);
+// Handle the cancel button
+cancelButton.addActionListener(cancelEvent -> cropFrame.dispose());
+}
 
-        if (selectedColor != null) {
-            backgroundSettings.setBackgroundColor(selectedColor); // Update the settings object
-            colorPreviewLabel.setBackground(selectedColor); // Update the visual preview
-            statusLabel.setText("Background color selected. Press 'Process Background' to apply.");
-            // DO NOT trigger background removal here anymore.
-            // if (currentPhoto != null) {
-            //     handleRemoveBackground(e); // Removed this line
-            // }
+// Updated handler for the Process Background and Resize button
+private void handleProcessBackgroundAndResize(ActionEvent e) {
+if (currentPhoto == null) {
+    JOptionPane.showMessageDialog(mainFrame, "No image loaded.", "Error", JOptionPane.ERROR_MESSAGE);
+    return;
+}
+
+// --- Get User Inputs (in millimeters) ---
+int targetWidthMM, targetHeightMM;
+try {
+    targetWidthMM = Integer.parseInt(widthField.getText().trim());
+    targetHeightMM = Integer.parseInt(heightField.getText().trim());
+    if (targetWidthMM <= 0 || targetHeightMM <= 0) {
+        throw new NumberFormatException("Dimensions must be positive.");
+    }
+} catch (NumberFormatException ex) {
+    JOptionPane.showMessageDialog(mainFrame,
+            "Invalid dimensions entered. Please enter positive numbers.",
+            "Input Error",
+            JOptionPane.ERROR_MESSAGE);
+    return;
+}
+
+// Validate background image if that type is selected
+if (backgroundSettings.getType() == BackgroundSettings.BackgroundType.CUSTOM_IMAGE) {
+    String bgImagePath = backgroundSettings.getBackgroundImagePath();
+    if (bgImagePath == null || bgImagePath.isEmpty()) {
+        JOptionPane.showMessageDialog(mainFrame,
+                "Please select a background image.",
+                "Missing Background Image",
+                JOptionPane.ERROR_MESSAGE);
+        return;
+    }
+    
+    // Check if the file exists
+    File bgImageFile = new File(bgImagePath);
+    if (!bgImageFile.exists() || !bgImageFile.isFile()) {
+        JOptionPane.showMessageDialog(mainFrame,
+                "Background image file not found: " + bgImagePath,
+                "File Not Found",
+                JOptionPane.ERROR_MESSAGE);
+        return;
+    }
+}
+
+// Convert MM to pixels using the PIXELS_PER_MM constant
+int targetWidth = targetWidthMM * Constants.PIXELS_PER_MM;
+int targetHeight = targetHeightMM * Constants.PIXELS_PER_MM;
+
+// --- Process in Background ---
+photoHistory.saveState(currentPhoto); // Save state before combined action
+statusLabel.setText("Processing background and resizing...");
+
+SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>() {
+    @Override
+    protected Void doInBackground() throws Exception {
+        try {
+            // Step 1: Remove Background using the selected background settings
+            BackgroundRemover remover = new BackgroundRemover(
+                    backgroundSettings,
+                    "model/modnet.onnx"
+            );
+            remover.process(currentPhoto);
+
+            // Step 2: Scale the result to user dimensions (maintaining aspect ratio)
+            ImageResizer resizer = new ImageResizer(
+                    targetWidth,
+                    targetHeight,
+                    true // true = maintain aspect ratio (scale, don't crop)
+            );
+            resizer.process(currentPhoto);
+
+            return null;
+        } catch (Exception ex) {
+            throw new Exception("Processing failed: " + ex.getMessage(), ex);
         }
     }
 
-    private void handleReset() {
-        if (currentPhoto == null) {
-            return;
+    @Override
+    protected void done() {
+        try {
+            get(); // Check for exceptions
+            updatePreview();
+            updateUndoRedoButtons();
+            layoutSourceFrame = currentPhoto.getProcessedFrame().clone();
+            statusLabel.setText("Background processed and image resized successfully");
+        } catch (InterruptedException | ExecutionException ex) {
+            JOptionPane.showMessageDialog(
+                    mainFrame,
+                    "Error during processing: " + ex.getCause().getMessage(),
+                    "Processing Error",
+                    JOptionPane.ERROR_MESSAGE
+            );
+            statusLabel.setText("Processing failed");
+            updatePreview();
+            updateUndoRedoButtons();
         }
-        photoHistory.saveState(currentPhoto);
-        currentPhoto.resetToOriginal();
-        updatePreview();
-        updateUndoRedoButtons();
-        layoutSourceFrame = currentPhoto.getProcessedFrame().clone();
-
-        statusLabel.setText("Image reset to original");
     }
+};
 
-    private void updatePreview() {
-        if (currentPhoto != null) {
-            BufferedImage image = currentPhoto.getProcessedBufferedImage();
-            int maxPreviewSize = Constants.PREVIEW_PANEL_WIDTH; // Use constant
-            int width = image.getWidth();
-            int height = image.getHeight();
-            Image scaledImage = image; // Default to original if small enough
-            if (width > maxPreviewSize || height > maxPreviewSize) {
-                double scale = Math.min((double) maxPreviewSize / width, (double) maxPreviewSize / height);
-                scaledImage = image.getScaledInstance((int) (width * scale), (int) (height * scale), Image.SCALE_SMOOTH);
+worker.execute();
+}
+
+private void generateLayoutSheet(String layoutOption) {
+statusLabel.setText("Generating layout sheet...");
+
+SwingWorker<BufferedImage, Void> worker = new SwingWorker<BufferedImage, Void>() {
+    @Override
+    protected BufferedImage doInBackground() {
+        try {
+
+            OpenCVFrameConverter.ToMat matConverter = new OpenCVFrameConverter.ToMat();
+            Java2DFrameConverter java2DConverter = new Java2DFrameConverter();
+
+            Mat bgrMat = matConverter.convert(layoutSourceFrame);
+            Mat rgbMat = new Mat();
+
+            org.bytedeco.opencv.global.opencv_imgproc.cvtColor(
+                    bgrMat, rgbMat, org.bytedeco.opencv.global.opencv_imgproc.COLOR_BGR2RGB
+            );
+
+            Frame rgbFrame = matConverter.convert(rgbMat);
+            BufferedImage base = java2DConverter.convert(rgbFrame);
+
+            int idWidth = 300, idHeight = 400;
+            int cols = 2, rows = 2;
+
+            switch (layoutOption) {
+                case "1x1 (1 copy)":
+                    cols = 1;
+                    rows = 1;
+                    break;
+                case "4x6 (8 copies)":
+                    cols = 4;
+                    rows = 2;
+                    break;
+                case "3x4 (6 copies)":
+                    cols = 3;
+                    rows = 2;
+                    break;
+                default:
+                    // Default is 2x2 (4 copies)
+                    break;
             }
-            previewLabel.setIcon(new ImageIcon(scaledImage));
-            previewLabel.setText(""); // Clear "No image" text
-        } else {
-            previewLabel.setIcon(null);
-            previewLabel.setText("No image loaded");
+
+            int spacing = 20;
+            int sheetWidth = cols * idWidth + (cols + 1) * spacing;
+            int sheetHeight = rows * idHeight + (rows + 1) * spacing;
+
+            BufferedImage sheet = new BufferedImage(sheetWidth, sheetHeight, BufferedImage.TYPE_INT_RGB);
+            Graphics2D g = sheet.createGraphics();
+            g.setColor(Color.WHITE);
+            g.fillRect(0, 0, sheetWidth, sheetHeight);
+
+            double imgAspect = (double) base.getWidth() / base.getHeight();
+            double cellAspect = (double) idWidth / idHeight;
+
+            int drawWidth, drawHeight;
+            if (imgAspect < cellAspect) {
+                // Image is narrower — fit height, crop width
+                drawHeight = idHeight;
+                drawWidth = (int) (idHeight * imgAspect);
+            } else {
+                // Image is wider — fit width, crop height
+                drawWidth = idWidth;
+                drawHeight = (int) (idWidth / imgAspect);
+            }
+
+            Image scaled = base.getScaledInstance(drawWidth, drawHeight, Image.SCALE_SMOOTH);
+
+            for (int r = 0; r < rows; r++) {
+                for (int c = 0; c < cols; c++) {
+                    int x = spacing + c * (idWidth + spacing);
+                    int y = spacing + r * (idHeight + spacing);
+
+                    int drawX = x + (idWidth - drawWidth) / 2;
+                    int drawY = y + (idHeight - drawHeight) / 2;
+
+                    g.drawImage(scaled, drawX, drawY, null);
+                }
+            }
+
+            g.dispose();
+            return sheet;
+
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            return null;
         }
-        previewLabel.revalidate();
-        previewLabel.repaint();
     }
 
-    // --- Inner Class: CropPanel ---
-    private class CropPanel extends JPanel {
+    @Override
+    protected void done() {
+        try {
+            BufferedImage layout = get();
+            if (layout != null) {
+                Java2DFrameConverter converter = new Java2DFrameConverter();
+                Frame sheetFrame = converter.convert(layout);
+                currentPhoto.setProcessedFrame(sheetFrame);
 
-        private BufferedImage image;
-        private Rectangle selectionRect;
-        private Point startPoint;
+                updatePreview();
+                updateUndoRedoButtons();
+                statusLabel.setText("Layout sheet generated.");
+            } else {
+                statusLabel.setText("Failed to generate sheet.");
+            }
+        } catch (Exception e) {
+            statusLabel.setText("Error creating layout.");
+            e.printStackTrace();
+        }
+    }
+};
 
-        public CropPanel(BufferedImage image) {
-            this.image = image;
-            this.setPreferredSize(new Dimension(image.getWidth(), image.getHeight()));
-            MouseAdapter mouseAdapter = new MouseAdapter() {
-                @Override
-                public void mousePressed(MouseEvent e) {
-                    startPoint = e.getPoint();
-                    selectionRect = null;
-                    repaint();
-                }
+worker.execute();
+}
 
-                @Override
-                public void mouseDragged(MouseEvent e) {
-                    if (startPoint != null) {
-                        int x = Math.min(startPoint.x, e.getX());
-                        int y = Math.min(startPoint.y, e.getY());
-                        int w = Math.abs(e.getX() - startPoint.x);
-                        int h = Math.abs(e.getY() - startPoint.y);
-                        selectionRect = new Rectangle(x, y, w, h);
-                        repaint();
-                    }
-                }
-            };
-            addMouseListener(mouseAdapter);
-            addMouseMotionListener(mouseAdapter);
+// Modified to only choose and store color
+private void handleChooseBackgroundColor(ActionEvent e) {
+Color initialColor = backgroundSettings.getBackgroundColor();
+Color selectedColor = JColorChooser.showDialog(mainFrame, "Choose Background Color", initialColor);
+
+if (selectedColor != null) {
+    backgroundSettings.setBackgroundColor(selectedColor); // Update the settings object
+    colorPreviewLabel.setBackground(selectedColor); // Update the visual preview
+    statusLabel.setText("Background color selected. Press 'Process Background' to apply.");
+}
+}
+
+private void handleReset() {
+if (currentPhoto == null) {
+    return;
+}
+photoHistory.saveState(currentPhoto);
+currentPhoto.resetToOriginal();
+updatePreview();
+updateUndoRedoButtons();
+layoutSourceFrame = currentPhoto.getProcessedFrame().clone();
+
+statusLabel.setText("Image reset to original");
+}
+
+private void updatePreview() {
+if (currentPhoto != null) {
+    BufferedImage image = currentPhoto.getProcessedBufferedImage();
+    int maxPreviewSize = Constants.PREVIEW_PANEL_WIDTH; // Use constant
+    int width = image.getWidth();
+    int height = image.getHeight();
+    Image scaledImage = image; // Default to original if small enough
+    if (width > maxPreviewSize || height > maxPreviewSize) {
+        double scale = Math.min((double) maxPreviewSize / width, (double) maxPreviewSize / height);
+        scaledImage = image.getScaledInstance((int) (width * scale), (int) (height * scale), Image.SCALE_SMOOTH);
+    }
+    previewLabel.setIcon(new ImageIcon(scaledImage));
+    previewLabel.setText(""); // Clear "No image" text
+} else {
+    previewLabel.setIcon(null);
+    previewLabel.setText("No image loaded");
+}
+previewLabel.revalidate();
+previewLabel.repaint();
+}
+
+// --- Inner Class: CropPanel ---
+private class CropPanel extends JPanel {
+
+private BufferedImage image;
+private Rectangle selectionRect;
+private Point startPoint;
+
+public CropPanel(BufferedImage image) {
+    this.image = image;
+    this.setPreferredSize(new Dimension(image.getWidth(), image.getHeight()));
+    MouseAdapter mouseAdapter = new MouseAdapter() {
+        @Override
+        public void mousePressed(MouseEvent e) {
+            startPoint = e.getPoint();
+            selectionRect = null;
+            repaint();
         }
 
         @Override
-        protected void paintComponent(Graphics g) {
-            super.paintComponent(g);
-            g.drawImage(image, 0, 0, null);
-            if (selectionRect != null) {
-                Graphics2D g2d = (Graphics2D) g;
-                g2d.setColor(new Color(0, 120, 215, 128));
-                g2d.fillRect(selectionRect.x, selectionRect.y, selectionRect.width, selectionRect.height);
-                g2d.setColor(Color.BLUE);
-                g2d.setStroke(new BasicStroke(2));
-                g2d.drawRect(selectionRect.x, selectionRect.y, selectionRect.width, selectionRect.height);
+        public void mouseDragged(MouseEvent e) {
+            if (startPoint != null) {
+                int x = Math.min(startPoint.x, e.getX());
+                int y = Math.min(startPoint.y, e.getY());
+                int w = Math.abs(e.getX() - startPoint.x);
+                int h = Math.abs(e.getY() - startPoint.y);
+                selectionRect = new Rectangle(x, y, w, h);
+                repaint();
             }
         }
+    };
+    addMouseListener(mouseAdapter);
+    addMouseMotionListener(mouseAdapter);
+}
 
-        public Rectangle getSelectionRectangle() {
-            return selectionRect;
-        }
+@Override
+protected void paintComponent(Graphics g) {
+    super.paintComponent(g);
+    g.drawImage(image, 0, 0, null);
+    if (selectionRect != null) {
+        Graphics2D g2d = (Graphics2D) g;
+        g2d.setColor(new Color(0, 120, 215, 128));
+        g2d.fillRect(selectionRect.x, selectionRect.y, selectionRect.width, selectionRect.height);
+        g2d.setColor(Color.BLUE);
+        g2d.setStroke(new BasicStroke(2));
+        g2d.drawRect(selectionRect.x, selectionRect.y, selectionRect.width, selectionRect.height);
     }
+}
 
-    // Add the handler for batch processing:
+public Rectangle getSelectionRectangle() {
+    return selectionRect;
+}
+}
+
+// Batch processing handler with background image support
 private void handleBatchProcess(ActionEvent e) {
-    // Create a file chooser that allows multiple file selection
-    JFileChooser fileChooser = new JFileChooser();
-    fileChooser.setDialogTitle("Select Photos for Batch Processing");
-    fileChooser.setMultiSelectionEnabled(true);
-    fileChooser.setFileFilter(new FileNameExtensionFilter("Image files", Constants.SUPPORTED_INPUT_FORMATS));
+// Create a file chooser that allows multiple file selection
+JFileChooser fileChooser = new JFileChooser();
+fileChooser.setDialogTitle("Select Photos for Batch Processing");
+fileChooser.setMultiSelectionEnabled(true);
+fileChooser.setFileFilter(new FileNameExtensionFilter("Image files", Constants.SUPPORTED_INPUT_FORMATS));
+
+if (fileChooser.showOpenDialog(mainFrame) == JFileChooser.APPROVE_OPTION) {
+    File[] selectedFiles = fileChooser.getSelectedFiles();
     
-    if (fileChooser.showOpenDialog(mainFrame) == JFileChooser.APPROVE_OPTION) {
-        File[] selectedFiles = fileChooser.getSelectedFiles();
-        
-        // Validate we have at least one file
-        if (selectedFiles.length == 0) {
-            JOptionPane.showMessageDialog(mainFrame,
-                    "No files selected for batch processing.",
-                    "No Files Selected", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-        
-        // Store the selected files
-        batchInputFiles = new ArrayList<>();
-        for (File file : selectedFiles) {
-            if (FileUtils.isImageFile(file)) {
-                batchInputFiles.add(file);
-            } else {
-                JOptionPane.showMessageDialog(mainFrame,
-                        "Skipping unsupported file: " + file.getName(),
-                        "Unsupported File", JOptionPane.WARNING_MESSAGE);
-            }
-        }
-        
-        // If no valid files, exit early
-        if (batchInputFiles.isEmpty()) {
-            JOptionPane.showMessageDialog(mainFrame,
-                    "No valid image files were selected for batch processing.",
-                    "No Valid Files", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-        
-        // Create and show the batch processing options dialog
-        showBatchOptionsDialog();
+    // Validate we have at least one file
+    if (selectedFiles.length == 0) {
+        JOptionPane.showMessageDialog(mainFrame,
+                "No files selected for batch processing.",
+                "No Files Selected", JOptionPane.WARNING_MESSAGE);
+        return;
     }
+    
+    // Store the selected files
+    batchInputFiles = new ArrayList<>();
+    for (File file : selectedFiles) {
+        if (FileUtils.isImageFile(file)) {
+            batchInputFiles.add(file);
+        } else {
+            JOptionPane.showMessageDialog(mainFrame,
+                    "Skipping unsupported file: " + file.getName(),
+                    "Unsupported File", JOptionPane.WARNING_MESSAGE);
+        }
+    }
+    
+    // If no valid files, exit early
+    if (batchInputFiles.isEmpty()) {
+        JOptionPane.showMessageDialog(mainFrame,
+                "No valid image files were selected for batch processing.",
+                "No Valid Files", JOptionPane.ERROR_MESSAGE);
+        return;
+    }
+    
+    // Create and show the batch processing options dialog
+    showBatchOptionsDialog();
+}
 }
 
 private void showBatchOptionsDialog() {
-    // Create a dialog for batch processing options
-    JDialog optionsDialog = new JDialog(mainFrame, "Batch Processing Options", true);
-    optionsDialog.setLayout(new BorderLayout(10, 10));
-    optionsDialog.setSize(450, 350);
-    optionsDialog.setLocationRelativeTo(mainFrame);
+// Create a dialog for batch processing options
+JDialog optionsDialog = new JDialog(mainFrame, "Batch Processing Options", true);
+optionsDialog.setLayout(new BorderLayout(10, 10));
+optionsDialog.setSize(450, 450); // Made larger to accommodate background options
+optionsDialog.setLocationRelativeTo(mainFrame);
+
+JPanel optionsPanel = new JPanel();
+optionsPanel.setLayout(new BoxLayout(optionsPanel, BoxLayout.Y_AXIS));
+optionsPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+// Add file info
+JPanel fileInfoPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+fileInfoPanel.add(new JLabel("Processing " + batchInputFiles.size() + " files"));
+optionsPanel.add(fileInfoPanel);
+optionsPanel.add(Box.createRigidArea(new Dimension(0, 10)));
+
+// Add dimension inputs (reuse code from main panel)
+JPanel dimensionPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+JTextField batchWidthField = new JTextField(5);
+JTextField batchHeightField = new JTextField(5);
+
+// Pre-fill with current or standard dimensions
+batchWidthField.setText(widthField.getText());
+batchHeightField.setText(heightField.getText());
+
+dimensionPanel.add(new JLabel("Width (mm):"));
+dimensionPanel.add(batchWidthField);
+dimensionPanel.add(Box.createRigidArea(new Dimension(10, 0)));
+dimensionPanel.add(new JLabel("Height (mm):"));
+dimensionPanel.add(batchHeightField);
+optionsPanel.add(dimensionPanel);
+optionsPanel.add(Box.createRigidArea(new Dimension(0, 10)));
+
+// Add background type selection
+JPanel bgTypePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+ButtonGroup bgTypeGroup = new ButtonGroup();
+
+JRadioButton batchSolidColorRadio = new JRadioButton("Solid Color");
+JRadioButton batchImageRadio = new JRadioButton("Image Background");
+
+// Set initial state based on current settings
+if (backgroundSettings.getType() == BackgroundSettings.BackgroundType.SOLID_COLOR) {
+    batchSolidColorRadio.setSelected(true);
+} else {
+    batchImageRadio.setSelected(true);
+}
+
+bgTypeGroup.add(batchSolidColorRadio);
+bgTypeGroup.add(batchImageRadio);
+
+bgTypePanel.add(new JLabel("Background Type:"));
+bgTypePanel.add(batchSolidColorRadio);
+bgTypePanel.add(batchImageRadio);
+optionsPanel.add(bgTypePanel);
+optionsPanel.add(Box.createRigidArea(new Dimension(0, 10)));
+
+// Add background color chooser
+JPanel bgColorPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+JLabel colorPreview = new JLabel("  ");
+colorPreview.setOpaque(true);
+colorPreview.setBackground(backgroundSettings.getBackgroundColor());
+colorPreview.setBorder(BorderFactory.createLineBorder(Color.BLACK));
+colorPreview.setPreferredSize(new Dimension(20, 20));
+
+JButton bgColorButton = new JButton("Choose Background Color");
+bgColorButton.addActionListener(evt -> {
+    Color initialColor = colorPreview.getBackground();
+    Color selectedColor = JColorChooser.showDialog(optionsDialog, "Choose Background Color", initialColor);
     
-    JPanel optionsPanel = new JPanel();
-    optionsPanel.setLayout(new BoxLayout(optionsPanel, BoxLayout.Y_AXIS));
-    optionsPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+    if (selectedColor != null) {
+        colorPreview.setBackground(selectedColor);
+    }
+});
+
+bgColorPanel.add(bgColorButton);
+bgColorPanel.add(colorPreview);
+optionsPanel.add(bgColorPanel);
+optionsPanel.add(Box.createRigidArea(new Dimension(0, 10)));
+
+// Add background image selector
+JPanel bgImagePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+JTextField bgImagePathField = new JTextField(20);
+JButton browseImageButton = new JButton("Browse...");
+
+// Set initial path if available
+if (backgroundSettings.getType() == BackgroundSettings.BackgroundType.CUSTOM_IMAGE && 
+    backgroundSettings.getBackgroundImagePath() != null) {
+    bgImagePathField.setText(backgroundSettings.getBackgroundImagePath());
+}
+
+browseImageButton.addActionListener(evt -> {
+    JFileChooser imageChooser = new JFileChooser();
+    imageChooser.setFileFilter(new FileNameExtensionFilter(
+            "Image files", Constants.SUPPORTED_INPUT_FORMATS));
     
-    // Add file info
-    JPanel fileInfoPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-    fileInfoPanel.add(new JLabel("Processing " + batchInputFiles.size() + " files"));
-    optionsPanel.add(fileInfoPanel);
-    optionsPanel.add(Box.createRigidArea(new Dimension(0, 10)));
+    if (imageChooser.showOpenDialog(optionsDialog) == JFileChooser.APPROVE_OPTION) {
+        bgImagePathField.setText(imageChooser.getSelectedFile().getAbsolutePath());
+    }
+});
+
+bgImagePanel.add(new JLabel("Background Image:"));
+bgImagePanel.add(bgImagePathField);
+bgImagePanel.add(browseImageButton);
+optionsPanel.add(bgImagePanel);
+optionsPanel.add(Box.createRigidArea(new Dimension(0, 10)));
+
+// Add output format selection
+JPanel formatPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+JComboBox<String> formatComboBox = new JComboBox<>(Constants.SUPPORTED_OUTPUT_FORMATS);
+formatComboBox.setSelectedItem(exportSettings.getFormat().getExtension());
+
+formatPanel.add(new JLabel("Output Format:"));
+formatPanel.add(formatComboBox);
+optionsPanel.add(formatPanel);
+optionsPanel.add(Box.createRigidArea(new Dimension(0, 10)));
+
+// Add output directory selection
+JPanel outputDirPanel = new JPanel(new BorderLayout(5, 0));
+JTextField outputDirField = new JTextField(exportSettings.getOutputDirectory());
+JButton browseButton = new JButton("Browse...");
+
+browseButton.addActionListener(evt -> {
+    JFileChooser dirChooser = new JFileChooser();
+    dirChooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+    dirChooser.setDialogTitle("Select Output Directory");
     
-    // Add dimension inputs (reuse code from main panel)
-    JPanel dimensionPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-    JTextField batchWidthField = new JTextField(5);
-    JTextField batchHeightField = new JTextField(5);
+    if (dirChooser.showDialog(optionsDialog, "Select") == JFileChooser.APPROVE_OPTION) {
+        outputDirField.setText(dirChooser.getSelectedFile().getAbsolutePath());
+    }
+});
+
+outputDirPanel.add(new JLabel("Output Directory:"), BorderLayout.NORTH);
+outputDirPanel.add(outputDirField, BorderLayout.CENTER);
+outputDirPanel.add(browseButton, BorderLayout.EAST);
+optionsPanel.add(outputDirPanel);
+
+// Update UI based on selection
+ActionListener backgroundTypeListener = evt -> {
+    boolean isColorType = batchSolidColorRadio.isSelected();
     
-    // Pre-fill with current or standard dimensions
-    batchWidthField.setText(widthField.getText());
-    batchHeightField.setText(heightField.getText());
+    // Enable/disable color controls
+    bgColorPanel.setEnabled(isColorType);
+    colorPreview.setEnabled(isColorType);
+    bgColorButton.setEnabled(isColorType);
     
-    dimensionPanel.add(new JLabel("Width (mm):"));
-    dimensionPanel.add(batchWidthField);
-    dimensionPanel.add(Box.createRigidArea(new Dimension(10, 0)));
-    dimensionPanel.add(new JLabel("Height (mm):"));
-    dimensionPanel.add(batchHeightField);
-    optionsPanel.add(dimensionPanel);
-    optionsPanel.add(Box.createRigidArea(new Dimension(0, 10)));
-    
-    // Add background color chooser
-    JPanel bgColorPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-    JLabel colorPreview = new JLabel("  ");
-    colorPreview.setOpaque(true);
-    colorPreview.setBackground(backgroundSettings.getBackgroundColor());
-    colorPreview.setBorder(BorderFactory.createLineBorder(Color.BLACK));
-    colorPreview.setPreferredSize(new Dimension(20, 20));
-    
-    JButton bgColorButton = new JButton("Choose Background Color");
-    bgColorButton.addActionListener(evt -> {
-        Color initialColor = colorPreview.getBackground();
-        Color selectedColor = JColorChooser.showDialog(optionsDialog, "Choose Background Color", initialColor);
+    // Enable/disable image controls
+    bgImagePanel.setEnabled(!isColorType);
+    bgImagePathField.setEnabled(!isColorType);
+    browseImageButton.setEnabled(!isColorType);
+};
+
+batchSolidColorRadio.addActionListener(backgroundTypeListener);
+batchImageRadio.addActionListener(backgroundTypeListener);
+
+// Set initial state
+backgroundTypeListener.actionPerformed(null);
+
+// Add buttons
+JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+JButton cancelButton = new JButton("Cancel");
+JButton startButton = new JButton("Start Batch Processing");
+
+cancelButton.addActionListener(evt -> optionsDialog.dispose());
+
+startButton.addActionListener(evt -> {
+    // Validate inputs
+    try {
+        int width = Integer.parseInt(batchWidthField.getText().trim());
+        int height = Integer.parseInt(batchHeightField.getText().trim());
         
-        if (selectedColor != null) {
-            colorPreview.setBackground(selectedColor);
+        if (width <= 0 || height <= 0) {
+            throw new NumberFormatException("Dimensions must be positive");
         }
-    });
-    
-    bgColorPanel.add(bgColorButton);
-    bgColorPanel.add(colorPreview);
-    optionsPanel.add(bgColorPanel);
-    optionsPanel.add(Box.createRigidArea(new Dimension(0, 10)));
-    
-    // Add output format selection
-    JPanel formatPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-    JComboBox<String> formatComboBox = new JComboBox<>(Constants.SUPPORTED_OUTPUT_FORMATS);
-    formatComboBox.setSelectedItem(exportSettings.getFormat().getExtension());
-    
-    formatPanel.add(new JLabel("Output Format:"));
-    formatPanel.add(formatComboBox);
-    optionsPanel.add(formatPanel);
-    optionsPanel.add(Box.createRigidArea(new Dimension(0, 10)));
-    
-    // Add output directory selection
-    JPanel outputDirPanel = new JPanel(new BorderLayout(5, 0));
-    JTextField outputDirField = new JTextField(exportSettings.getOutputDirectory());
-    JButton browseButton = new JButton("Browse...");
-    
-    browseButton.addActionListener(evt -> {
-        JFileChooser dirChooser = new JFileChooser();
-        dirChooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-        dirChooser.setDialogTitle("Select Output Directory");
         
-        if (dirChooser.showDialog(optionsDialog, "Select") == JFileChooser.APPROVE_OPTION) {
-            outputDirField.setText(dirChooser.getSelectedFile().getAbsolutePath());
+        String outputDir = outputDirField.getText().trim();
+        if (outputDir.isEmpty()) {
+            JOptionPane.showMessageDialog(optionsDialog,
+                    "Please select an output directory.",
+                    "Missing Output Directory", JOptionPane.ERROR_MESSAGE);
+            return;
         }
-    });
-    
-    outputDirPanel.add(new JLabel("Output Directory:"), BorderLayout.NORTH);
-    outputDirPanel.add(outputDirField, BorderLayout.CENTER);
-    outputDirPanel.add(browseButton, BorderLayout.EAST);
-    optionsPanel.add(outputDirPanel);
-    
-    // Add buttons
-    JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-    JButton cancelButton = new JButton("Cancel");
-    JButton startButton = new JButton("Start Batch Processing");
-    
-    cancelButton.addActionListener(evt -> optionsDialog.dispose());
-    
-    startButton.addActionListener(evt -> {
-        // Validate inputs
-        try {
-            int width = Integer.parseInt(batchWidthField.getText().trim());
-            int height = Integer.parseInt(batchHeightField.getText().trim());
+        
+        // Update settings based on user selections
+        BackgroundSettings batchBgSettings = new BackgroundSettings();
+        
+        if (batchSolidColorRadio.isSelected()) {
+            batchBgSettings.setType(BackgroundSettings.BackgroundType.SOLID_COLOR);
+            batchBgSettings.setBackgroundColor(colorPreview.getBackground());
+        } else {
+            batchBgSettings.setType(BackgroundSettings.BackgroundType.CUSTOM_IMAGE);
+            String bgImagePath = bgImagePathField.getText().trim();
             
-            if (width <= 0 || height <= 0) {
-                throw new NumberFormatException("Dimensions must be positive");
-            }
-            
-            String outputDir = outputDirField.getText().trim();
-            if (outputDir.isEmpty()) {
+            if (bgImagePath.isEmpty()) {
                 JOptionPane.showMessageDialog(optionsDialog,
-                        "Please select an output directory.",
-                        "Missing Output Directory", JOptionPane.ERROR_MESSAGE);
+                        "Please select a background image.",
+                        "Missing Background Image", JOptionPane.ERROR_MESSAGE);
                 return;
             }
             
-            // Update settings based on user selections
-            BackgroundSettings batchBgSettings = new BackgroundSettings();
-            batchBgSettings.setBackgroundColor(colorPreview.getBackground());
-            
-            ExportSettings batchExportSettings = new ExportSettings();
-            String format = (String) formatComboBox.getSelectedItem();
-            if ("jpg".equals(format) || "jpeg".equals(format)) {
-                batchExportSettings.setFormat(ExportSettings.ImageFormat.JPEG);
-            } else if ("png".equals(format)) {
-                batchExportSettings.setFormat(ExportSettings.ImageFormat.PNG);
-            } else if ("bmp".equals(format)) {
-                batchExportSettings.setFormat(ExportSettings.ImageFormat.BMP);
+            // Validate image file exists
+            File bgImageFile = new File(bgImagePath);
+            if (!bgImageFile.exists() || !bgImageFile.isFile()) {
+                JOptionPane.showMessageDialog(optionsDialog,
+                        "Background image file not found.",
+                        "Invalid File", JOptionPane.ERROR_MESSAGE);
+                return;
             }
-            batchExportSettings.setOutputDirectory(outputDir);
             
-            // Close the options dialog
-            optionsDialog.dispose();
-            
-            // Start batch processing
-            startBatchProcessing(
-                    batchInputFiles,
-                    outputDir,
-                    batchBgSettings,
-                    batchExportSettings,
-                    width, 
-                    height,
-                    true // maintain aspect ratio
-            );
-            
-        } catch (NumberFormatException nfe) {
-            JOptionPane.showMessageDialog(optionsDialog,
-                    "Please enter valid numeric dimensions.",
-                    "Invalid Dimensions", JOptionPane.ERROR_MESSAGE);
+            batchBgSettings.setBackgroundImagePath(bgImagePath);
         }
-    });
-    
-    buttonPanel.add(cancelButton);
-    buttonPanel.add(startButton);
-    
-    // Assemble the dialog
-    optionsDialog.add(new JScrollPane(optionsPanel), BorderLayout.CENTER);
-    optionsDialog.add(buttonPanel, BorderLayout.SOUTH);
-    optionsDialog.setVisible(true);
+        
+        // Configure export settings
+        ExportSettings batchExportSettings = new ExportSettings();
+        String format = (String) formatComboBox.getSelectedItem();
+        if ("jpg".equals(format) || "jpeg".equals(format)) {
+            batchExportSettings.setFormat(ExportSettings.ImageFormat.JPEG);
+        } else if ("png".equals(format)) {
+            batchExportSettings.setFormat(ExportSettings.ImageFormat.PNG);
+        } else if ("bmp".equals(format)) {
+            batchExportSettings.setFormat(ExportSettings.ImageFormat.BMP);
+        }
+        batchExportSettings.setOutputDirectory(outputDir);
+        
+        // Close the options dialog
+        optionsDialog.dispose();
+        
+        // Start batch processing
+        startBatchProcessing(
+                batchInputFiles,
+                outputDir,
+                batchBgSettings,
+                batchExportSettings,
+                width, 
+                height,
+                true // maintain aspect ratio
+        );
+        
+    } catch (NumberFormatException nfe) {
+        JOptionPane.showMessageDialog(optionsDialog,
+                "Please enter valid numeric dimensions.",
+                "Invalid Dimensions", JOptionPane.ERROR_MESSAGE);
+    }
+});
+
+buttonPanel.add(cancelButton);
+buttonPanel.add(startButton);
+
+// Assemble the dialog
+optionsDialog.add(new JScrollPane(optionsPanel), BorderLayout.CENTER);
+optionsDialog.add(buttonPanel, BorderLayout.SOUTH);
+optionsDialog.setVisible(true);
 }
 
 private void startBatchProcessing(
-        List<File> inputFiles,
-        String outputDir,
-        BackgroundSettings bgSettings,
-        ExportSettings exportSettings,
-        int widthMM,
-        int heightMM,
-        boolean maintainAspectRatio) {
-    
-    // Create the batch processing panel and frame
-    if (batchPanel == null) {
-        batchPanel = new BatchProcessingPanel();
-    } else {
-        batchPanel.clearResults();
-    }
-    
-    if (batchProcessingFrame == null) {
-        batchProcessingFrame = new JFrame("Batch Processing");
-        batchProcessingFrame.setSize(600, 400);
-        batchProcessingFrame.setLocationRelativeTo(mainFrame);
-        batchProcessingFrame.setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
-    }
-    
-    batchPanel.setCloseAction(() -> batchProcessingFrame.setVisible(false));
-    batchProcessingFrame.setContentPane(batchPanel);
-    batchProcessingFrame.setVisible(true);
-    
-    // Start the batch processor
-    BatchProcessor processor = new BatchProcessor(
-            inputFiles,
-            outputDir,
-            bgSettings,
-            exportSettings,
-            widthMM,
-            heightMM,
-            maintainAspectRatio);
-    
-    // Set up progress callback
-    processor.onProgress(progressPercent -> {
-        SwingUtilities.invokeLater(() -> {
-            batchPanel.setProgress(progressPercent);
-        });
-    });
-    
-    // Set up completion callback
-    processor.onComplete(outputFiles -> {
-        SwingUtilities.invokeLater(() -> {
-            batchPanel.setResults(inputFiles, outputFiles);
-            batchPanel.setProgress(100);
-            
-            // Show a notification
-            JOptionPane.showMessageDialog(
-                    batchProcessingFrame,
-                    "Batch processing complete.\n" +
-                    "Successfully processed " + outputFiles.size() + " out of " + inputFiles.size() + " files.",
-                    "Processing Complete",
-                    JOptionPane.INFORMATION_MESSAGE);
-        });
-    });
-    
-    // Set up error callback
-    processor.onError(errorMessage -> {
-        SwingUtilities.invokeLater(() -> {
-            statusLabel.setText("Error: " + errorMessage);
-        });
-    });
-    
-    // Start processing
-    processor.process();
+    List<File> inputFiles,
+    String outputDir,
+    BackgroundSettings bgSettings,
+    ExportSettings exportSettings,
+    int widthMM,
+    int heightMM,
+    boolean maintainAspectRatio) {
+
+// Create the batch processing panel and frame
+if (batchPanel == null) {
+    batchPanel = new BatchProcessingPanel();
+} else {
+    batchPanel.clearResults();
 }
 
-    // Removed unused SelectionPanel class if it existed
+if (batchProcessingFrame == null) {
+    batchProcessingFrame = new JFrame("Batch Processing");
+    batchProcessingFrame.setSize(600, 400);
+    batchProcessingFrame.setLocationRelativeTo(mainFrame);
+    batchProcessingFrame.setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
+}
+
+batchPanel.setCloseAction(() -> batchProcessingFrame.setVisible(false));
+batchProcessingFrame.setContentPane(batchPanel);
+batchProcessingFrame.setVisible(true);
+
+// Start the batch processor
+BatchProcessor processor = new BatchProcessor(
+        inputFiles,
+        outputDir,
+        bgSettings,
+        exportSettings,
+        widthMM,
+        heightMM,
+        maintainAspectRatio);
+
+// Set up progress callback
+processor.onProgress(progressPercent -> {
+    SwingUtilities.invokeLater(() -> {
+        batchPanel.setProgress(progressPercent);
+    });
+});
+
+// Set up completion callback
+processor.onComplete(outputFiles -> {
+    SwingUtilities.invokeLater(() -> {
+        batchPanel.setResults(inputFiles, outputFiles);
+        batchPanel.setProgress(100);
+        
+        // Show a notification
+        JOptionPane.showMessageDialog(
+                batchProcessingFrame,
+                "Batch processing complete.\n" +
+                "Successfully processed " + outputFiles.size() + " out of " + inputFiles.size() + " files.",
+                "Processing Complete",
+                JOptionPane.INFORMATION_MESSAGE);
+    });
+});
+
+// Set up error callback
+processor.onError(errorMessage -> {
+    SwingUtilities.invokeLater(() -> {
+        statusLabel.setText("Error: " + errorMessage);
+    });
+});
+
+// Start processing
+processor.process();
+}
 }

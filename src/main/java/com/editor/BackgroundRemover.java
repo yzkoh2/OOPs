@@ -1,22 +1,24 @@
 package com.editor;
 
 import java.awt.Color;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.nio.file.Paths;
 
 import org.bytedeco.javacpp.indexer.UByteIndexer;
 import org.bytedeco.javacv.Frame;
 import org.bytedeco.javacv.Java2DFrameConverter;
 import org.bytedeco.javacv.OpenCVFrameConverter;
+import org.bytedeco.opencv.global.opencv_imgcodecs;
 import org.bytedeco.opencv.global.opencv_imgproc;
 import org.bytedeco.opencv.opencv_core.Mat;
-import org.bytedeco.opencv.opencv_core.Scalar;
 import org.bytedeco.opencv.opencv_core.Size;
 
 import com.entities.BackgroundSettings;
+import com.entities.BackgroundSettings.BackgroundType;
 import com.entities.Photo;
 
 import ai.onnxruntime.OrtException;
-import java.io.File;
-import java.nio.file.Paths;
 
 public class BackgroundRemover implements ImageProcessor {
 
@@ -26,17 +28,56 @@ public class BackgroundRemover implements ImageProcessor {
     private ONNXMattePredictor mattePredictor;
     private boolean modelInitialized = false;
     private String modelPath;
+    private Mat backgroundImage = null;
 
     /**
      * Creates a new BackgroundRemover with the specified settings and model path.
      * The model is loaded lazily when first needed.
      * 
-     * @param settings Background settings (color, etc.)
+     * @param settings Background settings (color, image path, etc.)
      * @param modelPath Path to the ONNX model file
      */
     public BackgroundRemover(BackgroundSettings settings, String modelPath) {
         this.settings = settings;
         this.modelPath = modelPath;
+        
+        // Load background image if one is specified
+        if (settings.getType() == BackgroundType.CUSTOM_IMAGE && 
+            settings.getBackgroundImagePath() != null && 
+            !settings.getBackgroundImagePath().isEmpty()) {
+            loadBackgroundImage();
+        }
+    }
+    
+    /**
+     * Load the background image from the path specified in settings
+     */
+    private void loadBackgroundImage() {
+        String imagePath = settings.getBackgroundImagePath();
+        if (imagePath != null && !imagePath.isEmpty()) {
+            try {
+                // Check if file exists
+                File bgFile = new File(imagePath);
+                if (!bgFile.exists() || !bgFile.isFile()) {
+                    System.err.println("Background image not found at: " + imagePath);
+                    return;
+                }
+                
+                // Load the image using OpenCV
+                backgroundImage = opencv_imgcodecs.imread(imagePath);
+                
+                // Verify the image was loaded
+                if (backgroundImage.empty()) {
+                    System.err.println("Failed to load background image: " + imagePath);
+                    backgroundImage = null;
+                } else {
+                    System.out.println("Background image loaded successfully: " + imagePath);
+                }
+            } catch (Exception e) {
+                System.err.println("Error loading background image: " + e.getMessage());
+                backgroundImage = null;
+            }
+        }
     }
     
     /**
@@ -98,30 +139,65 @@ public class BackgroundRemover implements ImageProcessor {
             Mat composite = new Mat(resized.size(), resized.type());
             UByteIndexer imgIdx = resized.createIndexer();
             UByteIndexer compIdx = composite.createIndexer();
-
-            // Get background color from settings (user selected)
-            Color bgColor = settings.getBackgroundColor();
-            int bgR = bgColor.getRed();
-            int bgG = bgColor.getGreen();
-            int bgB = bgColor.getBlue();
-
-            // Apply alpha compositing with the selected background color
-            for (int y = 0; y < 512; y++) {
-                for (int x = 0; x < 512; x++) {
-                    float alpha = alphaMatte[y][x];
-                    // RGB order in OpenCV is BGR
-                    int r = (int) (imgIdx.get(y, x, 2) * alpha + bgR * (1 - alpha));
-                    int g = (int) (imgIdx.get(y, x, 1) * alpha + bgG * (1 - alpha));
-                    int b = (int) (imgIdx.get(y, x, 0) * alpha + bgB * (1 - alpha));
-                    
-                    // Ensure valid color ranges
-                    r = Math.max(0, Math.min(255, r));
-                    g = Math.max(0, Math.min(255, g));
-                    b = Math.max(0, Math.min(255, b));
-                    
-                    compIdx.put(y, x, 2, r);
-                    compIdx.put(y, x, 1, g);
-                    compIdx.put(y, x, 0, b);
+            
+            // Handle custom background image if configured
+            if (settings.getType() == BackgroundType.CUSTOM_IMAGE && backgroundImage != null) {
+                // Resize background image to match the target size
+                Mat resizedBg = new Mat();
+                opencv_imgproc.resize(backgroundImage, resizedBg, new Size(512, 512));
+                UByteIndexer bgIdx = resizedBg.createIndexer();
+                
+                // Apply alpha compositing with the background image
+                for (int y = 0; y < 512; y++) {
+                    for (int x = 0; x < 512; x++) {
+                        float alpha = alphaMatte[y][x];
+                        
+                        // RGB order in OpenCV is BGR
+                        int r = (int) (imgIdx.get(y, x, 2) * alpha + bgIdx.get(y, x, 2) * (1 - alpha));
+                        int g = (int) (imgIdx.get(y, x, 1) * alpha + bgIdx.get(y, x, 1) * (1 - alpha));
+                        int b = (int) (imgIdx.get(y, x, 0) * alpha + bgIdx.get(y, x, 0) * (1 - alpha));
+                        
+                        // Ensure valid color ranges
+                        r = Math.max(0, Math.min(255, r));
+                        g = Math.max(0, Math.min(255, g));
+                        b = Math.max(0, Math.min(255, b));
+                        
+                        compIdx.put(y, x, 2, r);
+                        compIdx.put(y, x, 1, g);
+                        compIdx.put(y, x, 0, b);
+                    }
+                }
+                
+                // Cleanup background resources
+                bgIdx.release();
+                resizedBg.release();
+            }
+            else {
+                // Fall back to solid color background
+                Color bgColor = settings.getBackgroundColor();
+                int bgR = bgColor.getRed();
+                int bgG = bgColor.getGreen();
+                int bgB = bgColor.getBlue();
+                
+                // Apply alpha compositing with the selected background color
+                for (int y = 0; y < 512; y++) {
+                    for (int x = 0; x < 512; x++) {
+                        float alpha = alphaMatte[y][x];
+                        
+                        // RGB order in OpenCV is BGR
+                        int r = (int) (imgIdx.get(y, x, 2) * alpha + bgR * (1 - alpha));
+                        int g = (int) (imgIdx.get(y, x, 1) * alpha + bgG * (1 - alpha));
+                        int b = (int) (imgIdx.get(y, x, 0) * alpha + bgB * (1 - alpha));
+                        
+                        // Ensure valid color ranges
+                        r = Math.max(0, Math.min(255, r));
+                        g = Math.max(0, Math.min(255, g));
+                        b = Math.max(0, Math.min(255, b));
+                        
+                        compIdx.put(y, x, 2, r);
+                        compIdx.put(y, x, 1, g);
+                        compIdx.put(y, x, 0, b);
+                    }
                 }
             }
 
@@ -156,6 +232,12 @@ public class BackgroundRemover implements ImageProcessor {
      * Releases resources associated with this BackgroundRemover
      */
     public void close() {
+        // Release the background image if loaded
+        if (backgroundImage != null) {
+            backgroundImage.release();
+            backgroundImage = null;
+        }
+        
         // No explicit close method in ONNXMattePredictor yet, but would be good to add
         modelInitialized = false;
         mattePredictor = null;
