@@ -758,29 +758,33 @@ public class MainApplication {
 
     private void generateLayoutSheet(String layoutOption) {
         statusLabel.setText("Generating layout sheet...");
-    
+
         SwingWorker<BufferedImage, Void> worker = new SwingWorker<BufferedImage, Void>() {
             @Override
             protected BufferedImage doInBackground() {
                 try {
-       
+
                     OpenCVFrameConverter.ToMat matConverter = new OpenCVFrameConverter.ToMat();
                     Java2DFrameConverter java2DConverter = new Java2DFrameConverter();
-    
+
                     Mat bgrMat = matConverter.convert(layoutSourceFrame);
                     Mat rgbMat = new Mat();
-    
+
                     org.bytedeco.opencv.global.opencv_imgproc.cvtColor(
                             bgrMat, rgbMat, org.bytedeco.opencv.global.opencv_imgproc.COLOR_BGR2RGB
                     );
-    
+
                     Frame rgbFrame = matConverter.convert(rgbMat);
                     BufferedImage base = java2DConverter.convert(rgbFrame);
-    
+
                     int idWidth = 300, idHeight = 400;
                     int cols = 2, rows = 2;
-    
+
                     switch (layoutOption) {
+                        case "1x1 (1 copy)":
+                            cols = 1;
+                            rows = 1;
+                            break;
                         case "4x6 (8 copies)":
                             cols = 4;
                             rows = 2;
@@ -790,19 +794,19 @@ public class MainApplication {
                             rows = 2;
                             break;
                     }
-    
+
                     int spacing = 20;
                     int sheetWidth = cols * idWidth + (cols + 1) * spacing;
                     int sheetHeight = rows * idHeight + (rows + 1) * spacing;
-    
+
                     BufferedImage sheet = new BufferedImage(sheetWidth, sheetHeight, BufferedImage.TYPE_INT_RGB);
                     Graphics2D g = sheet.createGraphics();
                     g.setColor(Color.WHITE);
                     g.fillRect(0, 0, sheetWidth, sheetHeight);
-    
+
                     double imgAspect = (double) base.getWidth() / base.getHeight();
                     double cellAspect = (double) idWidth / idHeight;
-    
+
                     int drawWidth, drawHeight;
                     if (imgAspect < cellAspect) {
                         // Image is narrower — fit height, crop width
@@ -813,30 +817,30 @@ public class MainApplication {
                         drawWidth = idWidth;
                         drawHeight = (int) (idWidth / imgAspect);
                     }
-    
+
                     Image scaled = base.getScaledInstance(drawWidth, drawHeight, Image.SCALE_SMOOTH);
-    
+
                     for (int r = 0; r < rows; r++) {
                         for (int c = 0; c < cols; c++) {
                             int x = spacing + c * (idWidth + spacing);
                             int y = spacing + r * (idHeight + spacing);
-    
+
                             int drawX = x + (idWidth - drawWidth) / 2;
                             int drawY = y + (idHeight - drawHeight) / 2;
-    
+
                             g.drawImage(scaled, drawX, drawY, null);
                         }
                     }
-    
+
                     g.dispose();
                     return sheet;
-    
+
                 } catch (Exception ex) {
                     ex.printStackTrace();
                     return null;
                 }
             }
-    
+
             @Override
             protected void done() {
                 try {
@@ -845,7 +849,7 @@ public class MainApplication {
                         Java2DFrameConverter converter = new Java2DFrameConverter();
                         Frame sheetFrame = converter.convert(layout);
                         currentPhoto.setProcessedFrame(sheetFrame);
-    
+
                         updatePreview();
                         updateUndoRedoButtons();
                         statusLabel.setText("Layout sheet generated.");
@@ -858,10 +862,9 @@ public class MainApplication {
                 }
             }
         };
-    
+
         worker.execute();
     }
-    
 
     // --- Modified: Only chooses and stores color ---
     private void handleChooseBackgroundColor(ActionEvent e) {
