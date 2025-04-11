@@ -46,7 +46,16 @@
         <artifactId>ffmpeg-platform</artifactId>
         <version>6.0-1.5.9</version>
     </dependency>
+
+    <dependency>
+        <groupId>com.microsoft.onnxruntime</groupId>
+        <artifactId>onnxruntime</artifactId>
+        <version>1.16.3</version>
+    </dependency>
   </dependencies>
+
+    
+
 
   <build>
     <pluginManagement><!-- lock down plugins versions to avoid using Maven defaults (may be moved to parent pom) -->

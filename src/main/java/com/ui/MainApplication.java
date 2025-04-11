@@ -635,125 +635,39 @@ public class MainApplication {
             );
             return;
         }
-
-        // Create a custom panel for interactive selection
-        BufferedImage image = currentPhoto.getProcessedBufferedImage();
-
-        // Use a predefined or dynamic maximum width and height for the selection panel
-        int maxWidth = 800;  // Max width for the panel
-        int maxHeight = 600; // Max height for the panel
-
-        // Calculate the scaling factor to maintain the aspect ratio
-        double aspectRatio = (double) image.getWidth() / image.getHeight();
-        int panelWidth = maxWidth;
-        int panelHeight = (int) (maxWidth / aspectRatio);
-
-        if (panelHeight > maxHeight) {
-            panelHeight = maxHeight;
-            panelWidth = (int) (maxHeight * aspectRatio);
-        }
-
-        // Scale the image to fit the selection panel, while maintaining the aspect ratio
-        Image scaledImage = image.getScaledInstance(panelWidth, panelHeight, Image.SCALE_SMOOTH);
-        BufferedImage resizedImage = new BufferedImage(panelWidth, panelHeight, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g2d = resizedImage.createGraphics();
-        g2d.drawImage(scaledImage, 0, 0, null);
-        g2d.dispose();
-
-        // Store the scaling factor for later use (used for mapping selection rectangle back to original image)
-        final double scaleX = (double) image.getWidth() / resizedImage.getWidth();
-        final double scaleY = (double) image.getHeight() / resizedImage.getHeight();
-
-        SelectionPanel selectionPanel = new SelectionPanel(resizedImage, this);
-
-        // Create a frame to hold the selection panel
-        JFrame selectionFrame = new JFrame("Select Foreground - Click and drag to select area");
-        selectionFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-        selectionFrame.setLayout(new BorderLayout());
-
-        // Add control buttons
-        JPanel buttonPanel = new JPanel();
-        JButton processButton = new JButton("Process Background Removal");
-        JButton cancelButton = new JButton("Cancel");
-
-        buttonPanel.add(processButton);
-        buttonPanel.add(cancelButton);
-
-        // Add components to frame
-        selectionFrame.add(new JScrollPane(selectionPanel), BorderLayout.CENTER);
-        selectionFrame.add(buttonPanel, BorderLayout.SOUTH);
-
-        // Set frame size and make visible
-        selectionFrame.setSize(Math.min(image.getWidth() + 50, 800),
-                Math.min(image.getHeight() + 100, 600));
-        selectionFrame.setLocationRelativeTo(mainFrame);
-        selectionFrame.setVisible(true);
-
-        // Handle process button click
-        processButton.addActionListener(processEvent -> {
-            Rectangle selectionRect = selectionPanel.getSelectionRectangle();
-
-            if (selectionRect != null && selectionRect.width > 10 && selectionRect.height > 10) {
-                statusLabel.setText("Removing background...");
-
-                // Use SwingWorker to process in background
-                SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>() {
-                    @Override
-                    protected Void doInBackground() throws Exception {
-                        // Convert Java Rectangle to OpenCV Rect
-                        // Scale the selection area back to the original image coordinates
-                        int originalX = (int) (selectionRect.x * scaleX);
-                        int originalY = (int) (selectionRect.y * scaleY);
-                        int originalWidth = (int) (selectionRect.width * scaleX);
-                        int originalHeight = (int) (selectionRect.height * scaleY);
-
-                        // Create OpenCV Rect using the scaled coordinates
-                        Rect rect = new Rect(originalX, originalY, originalWidth, originalHeight);
-
-                        // Create background remover with selection rectangle
-                        BackgroundRemover remover = new BackgroundRemover(backgroundSettings);
-                        remover.setSelectionRect(rect.x(), rect.y(),
-                                rect.x() + rect.width(),
-                                rect.y() + rect.height());
-
-                        // Process the photo
-                        remover.process(currentPhoto);
-                        return null;
-                    }
-
-                    @Override
-                    protected void done() {
-                        try {
-                            get(); // Check for exceptions
-                            updatePreview();
-                            statusLabel.setText("Background removed successfully");
-                        } catch (Exception ex) {
-                            JOptionPane.showMessageDialog(
-                                    mainFrame,
-                                    "Error removing background: " + ex.getMessage(),
-                                    "Error",
-                                    JOptionPane.ERROR_MESSAGE
-                            );
-                            statusLabel.setText("Failed to remove background");
-                        }
-                    }
-                };
-
-                worker.execute();
-                selectionFrame.dispose();
-            } else {
-                JOptionPane.showMessageDialog(
-                        selectionFrame,
-                        "Please select a valid area (minimum 10x10 pixels).",
-                        "Invalid Selection",
-                        JOptionPane.WARNING_MESSAGE
-                );
+    
+        statusLabel.setText("Removing background...");
+    
+        SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>() {
+            @Override
+            protected Void doInBackground() throws Exception {
+                // Create background remover (with ONNX model)
+                BackgroundRemover remover = new BackgroundRemover(backgroundSettings, "model/modnet.onnx");
+                remover.process(currentPhoto);
+                return null;
             }
-        });
-
-        // Handle cancel button click
-        cancelButton.addActionListener(cancelEvent -> selectionFrame.dispose());
+    
+            @Override
+            protected void done() {
+                try {
+                    get(); // Check for exceptions
+                    updatePreview();
+                    statusLabel.setText("Background removed successfully");
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(
+                            mainFrame,
+                            "Error removing background: " + ex.getMessage(),
+                            "Error",
+                            JOptionPane.ERROR_MESSAGE
+                    );
+                    statusLabel.setText("Failed to remove background");
+                }
+            }
+        };
+    
+        worker.execute();
     }
+    
 
     // private void handleRemoveBackground(ActionEvent e) {
     //     if (currentPhoto == null) {
