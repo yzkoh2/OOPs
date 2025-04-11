@@ -688,98 +688,88 @@ public class MainApplication {
 // Updated handler for the Process Background and Resize button
 
 // Updated handler for the Process Background and Resize button
-    private void handleProcessBackgroundAndResize(ActionEvent e) {
-        if (currentPhoto == null) {
-            JOptionPane.showMessageDialog(mainFrame, "No image loaded.", "Error", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-
-        // --- Get User Inputs (in millimeters) ---
-        int targetWidthMM, targetHeightMM;
-        try {
-            targetWidthMM = Integer.parseInt(widthField.getText().trim());
-            targetHeightMM = Integer.parseInt(heightField.getText().trim());
-            if (targetWidthMM <= 0 || targetHeightMM <= 0) {
-                throw new NumberFormatException("Dimensions must be positive.");
-            }
-        } catch (NumberFormatException ex) {
-            JOptionPane.showMessageDialog(mainFrame,
-                    "Invalid dimensions entered. Please enter positive numbers.",
-                    "Input Error",
-                    JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-
-        // Convert MM to pixels using the PIXELS_PER_MM constant
-        int targetWidth = targetWidthMM * Constants.PIXELS_PER_MM;
-        int targetHeight = targetHeightMM * Constants.PIXELS_PER_MM;
-
-        // --- Process in Background ---
-        photoHistory.saveState(currentPhoto); // Save state before combined action
-        statusLabel.setText("Processing background and resizing...");
-
-        SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>() {
-            @Override
-            protected Void doInBackground() throws Exception {
-                try {
-                    // Step 1: Remove Background using the selected color from backgroundSettings
-                    BackgroundRemover remover = new BackgroundRemover(
-                            backgroundSettings,
-                            "model/modnet.onnx"
-                    );
-                    remover.process(currentPhoto);
-
-                    // Step 2: Scale the result to user dimensions (maintaining aspect ratio)
-                    ImageResizer resizer = new ImageResizer(
-                            targetWidth,
-                            targetHeight,
-                            true // true = maintain aspect ratio (scale, don't crop)
-                    );
-                    resizer.process(currentPhoto);
-
-                    return null;
-                } catch (Exception ex) {
-                    throw new Exception("Processing failed: " + ex.getMessage(), ex);
-                }
-            }
-
-            @Override
-            protected void done() {
-                try {
-                    get(); // Check for exceptions
-                    updatePreview();
-                    updateUndoRedoButtons();
-                    layoutSourceFrame = currentPhoto.getProcessedFrame().clone();
-                    statusLabel.setText("Background processed and image resized successfully");
-                } catch (InterruptedException | ExecutionException ex) {
-                    JOptionPane.showMessageDialog(
-                            mainFrame,
-                            "Error during processing: " + ex.getCause().getMessage(),
-                            "Processing Error",
-                            JOptionPane.ERROR_MESSAGE
-                    );
-                    statusLabel.setText("Processing failed");
-
-                    // Optional: attempt to roll back on failure
-                    /*
-                try {
-                    Photo previousState = photoHistory.undo(currentPhoto);
-                    if (previousState != null) {
-                        currentPhoto = previousState;
-                    }
-                } catch (Exception rollbackEx) {
-                    // Silently handle rollback failure
-                }
-                     */
-                    updatePreview();
-                    updateUndoRedoButtons();
-                }
-            }
-        };
-
-        worker.execute();
+private void handleProcessBackgroundAndResize(ActionEvent e) {
+    if (currentPhoto == null) {
+        JOptionPane.showMessageDialog(mainFrame, "No image loaded.", "Error", JOptionPane.ERROR_MESSAGE);
+        return;
     }
 
+    // --- Get User Inputs (in millimeters) ---
+    int targetWidthMM, targetHeightMM;
+    try {
+        targetWidthMM = Integer.parseInt(widthField.getText().trim());
+        targetHeightMM = Integer.parseInt(heightField.getText().trim());
+        if (targetWidthMM <= 0 || targetHeightMM <= 0) {
+            throw new NumberFormatException("Dimensions must be positive.");
+        }
+    } catch (NumberFormatException ex) {
+        JOptionPane.showMessageDialog(mainFrame,
+                "Invalid dimensions entered. Please enter positive numbers.",
+                "Input Error",
+                JOptionPane.ERROR_MESSAGE);
+        return;
+    }
+
+    // Convert MM to pixels using the PIXELS_PER_MM constant
+    int targetWidth = targetWidthMM * Constants.PIXELS_PER_MM;
+    int targetHeight = targetHeightMM * Constants.PIXELS_PER_MM;
+
+    // --- Process in Background ---
+    photoHistory.saveState(currentPhoto); // Save state before combined action
+    statusLabel.setText("Processing background and resizing...");
+
+    SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>() {
+        @Override
+        protected Void doInBackground() throws Exception {
+            try {
+                // Step 1: Remove Background using the selected color from backgroundSettings
+                BackgroundRemover remover = new BackgroundRemover(
+                        backgroundSettings,
+                        "model/modnet.onnx"
+                );
+                remover.process(currentPhoto);
+
+                // Step 2: Scale the result to user dimensions (maintaining aspect ratio)
+                // Pass the background color to use for padding
+                ImageResizer resizer = new ImageResizer(
+                        targetWidth,
+                        targetHeight,
+                        true, // true = maintain aspect ratio (scale, don't crop)
+                        backgroundSettings.getBackgroundColor() // Use the selected background color for padding
+                );
+                resizer.process(currentPhoto);
+
+                return null;
+            } catch (Exception ex) {
+                throw new Exception("Processing failed: " + ex.getMessage(), ex);
+            }
+        }
+
+        @Override
+        protected void done() {
+            try {
+                get(); // Check for exceptions
+                updatePreview();
+                updateUndoRedoButtons();
+                layoutSourceFrame = currentPhoto.getProcessedFrame().clone();
+                statusLabel.setText("Background processed and image resized successfully");
+            } catch (InterruptedException | ExecutionException ex) {
+                JOptionPane.showMessageDialog(
+                        mainFrame,
+                        "Error during processing: " + ex.getCause().getMessage(),
+                        "Processing Error",
+                        JOptionPane.ERROR_MESSAGE
+                );
+                statusLabel.setText("Processing failed");
+
+                updatePreview();
+                updateUndoRedoButtons();
+            }
+        }
+    };
+
+    worker.execute();
+}
     
     private void generateLayoutSheet(String layoutOption) {
         statusLabel.setText("Generating layout sheet...");

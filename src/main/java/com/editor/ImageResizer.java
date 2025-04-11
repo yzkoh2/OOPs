@@ -1,4 +1,3 @@
-// Update to ImageResizer.java to ensure scaling instead of cropping
 package com.editor;
 
 import org.bytedeco.javacv.Frame;
@@ -9,32 +8,51 @@ import org.bytedeco.opencv.opencv_core.Rect;
 import org.bytedeco.opencv.opencv_core.Scalar;
 import org.bytedeco.opencv.opencv_core.Size;
 
+import java.awt.Color;
+
 public class ImageResizer implements ImageProcessor {
 
     private final int targetWidth;
     private final int targetHeight;
     private final boolean maintainAspectRatio;
     private Rect cropRect;
+    private final Color backgroundColor;
     private final OpenCVFrameConverter.ToMat converter = new OpenCVFrameConverter.ToMat();
 
     /**
-     * Constructor for simple resizing (scaling)
+     * Constructor for simple resizing (scaling) with default white background
      */
     public ImageResizer(int targetWidth, int targetHeight, boolean maintainAspectRatio) {
+        this(targetWidth, targetHeight, maintainAspectRatio, Color.WHITE);
+    }
+    
+    /**
+     * Constructor for simple resizing (scaling) with custom background color
+     */
+    public ImageResizer(int targetWidth, int targetHeight, boolean maintainAspectRatio, Color backgroundColor) {
         this.targetWidth = targetWidth;
         this.targetHeight = targetHeight;
         this.maintainAspectRatio = maintainAspectRatio;
         this.cropRect = null; // No cropping, just resize
+        this.backgroundColor = backgroundColor;
     }
 
     /**
-     * Constructor for crop + resize operations
+     * Constructor for crop + resize operations with default white background
      */
     public ImageResizer(Rect cropRect, int targetWidth, int targetHeight, boolean maintainAspectRatio) {
+        this(cropRect, targetWidth, targetHeight, maintainAspectRatio, Color.WHITE);
+    }
+    
+    /**
+     * Constructor for crop + resize operations with custom background color
+     */
+    public ImageResizer(Rect cropRect, int targetWidth, int targetHeight, boolean maintainAspectRatio, Color backgroundColor) {
         this.cropRect = cropRect;
         this.targetWidth = targetWidth;
         this.targetHeight = targetHeight;
         this.maintainAspectRatio = maintainAspectRatio;
+        this.backgroundColor = backgroundColor;
     }
 
     @Override
@@ -76,10 +94,17 @@ public class ImageResizer implements ImageProcessor {
                                  0, 0, opencv_imgproc.INTER_AREA);
             
             // If the scaled image is smaller than the target, create a padded image
-            // with the background color (white by default)
+            // with the user-selected background color
             if (newWidth != targetWidth || newHeight != targetHeight) {
-                Mat paddedImage = new Mat(targetHeight, targetWidth, result.type(), 
-                                         new Scalar(255, 255, 255, 255));
+                // Convert Java Color to OpenCV Scalar (BGR format in OpenCV)
+                Scalar bgColorScalar = new Scalar(
+                    backgroundColor.getBlue(),
+                    backgroundColor.getGreen(),
+                    backgroundColor.getRed(),
+                    255
+                );
+                
+                Mat paddedImage = new Mat(targetHeight, targetWidth, result.type(), bgColorScalar);
                 
                 // Position the image centered horizontally, but aligned to the bottom vertically
                 // (This is common for ID photos where we need less space at the bottom)

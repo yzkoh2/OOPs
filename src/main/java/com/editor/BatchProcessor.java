@@ -129,11 +129,12 @@ public class BatchProcessor {
                             "model/modnet.onnx");
                     remover.process(photo);
                     
-                    // Step 2: Resize the photo
+                    // Step 2: Resize the photo - USE THE SAME BACKGROUND COLOR FOR PADDING!
                     ImageResizer resizer = new ImageResizer(
                             targetWidth,
                             targetHeight,
-                            maintainAspectRatio);
+                            maintainAspectRatio,
+                            backgroundSettings.getBackgroundColor());  // Pass the background color
                     resizer.process(photo);
                     
                     // Step 3: Export the processed photo
