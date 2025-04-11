@@ -1,4 +1,3 @@
-// Update to BackgroundRemover.java to better handle the user selected background color
 package com.editor;
 
 import java.awt.Color;
@@ -9,7 +8,6 @@ import org.bytedeco.javacv.Java2DFrameConverter;
 import org.bytedeco.javacv.OpenCVFrameConverter;
 import org.bytedeco.opencv.global.opencv_imgproc;
 import org.bytedeco.opencv.opencv_core.Mat;
-import org.bytedeco.opencv.opencv_core.Rect;
 import org.bytedeco.opencv.opencv_core.Scalar;
 import org.bytedeco.opencv.opencv_core.Size;
 
@@ -24,9 +22,6 @@ public class BackgroundRemover implements ImageProcessor {
     private final OpenCVFrameConverter.ToMat converter = new OpenCVFrameConverter.ToMat();
     private final Java2DFrameConverter java2dConverter = new Java2DFrameConverter();
     private final ONNXMattePredictor mattePredictor;
-
-    private static final int FINAL_WIDTH = 600;
-    private static final int FINAL_HEIGHT = 600;
 
     public BackgroundRemover(BackgroundSettings settings, String modelPath) throws OrtException {
         this.settings = settings;
@@ -48,11 +43,11 @@ public class BackgroundRemover implements ImageProcessor {
             // Get alpha matte prediction (transparency mask)
             float[][] alphaMatte = mattePredictor.predictAlphaMatte(image);
 
-            // Resize image for consistent processing
+            // Resize input image for processing if needed
             Mat resized = new Mat();
             opencv_imgproc.resize(image, resized, new Size(512, 512));
 
-            // Create composite image with applied background color
+            // Create output image with the same size as the input
             Mat composite = new Mat(resized.size(), resized.type());
             UByteIndexer imgIdx = resized.createIndexer();
             UByteIndexer compIdx = composite.createIndexer();
@@ -86,20 +81,11 @@ public class BackgroundRemover implements ImageProcessor {
             imgIdx.release();
             compIdx.release();
 
-            // Create final image with the same background color for padding
-            Mat finalImage = new Mat(
-                new Size(FINAL_WIDTH, FINAL_HEIGHT), 
-                composite.type(), 
-                new Scalar(bgB, bgG, bgR, 255.0)
-            );
-            
-            // Position the image centered horizontally, but aligned to the bottom vertically
-            // This matches ID photo positioning standards
-            int xOffset = (FINAL_WIDTH - 512) / 2;  // Center horizontally
-            int yOffset = FINAL_HEIGHT - 512;       // Align to bottom
-            Mat roi = finalImage.apply(new Rect(xOffset, yOffset, 512, 512));
-
-            composite.copyTo(roi);
+            // Resize back to original dimensions before returning
+            Mat finalImage = new Mat();
+            opencv_imgproc.resize(composite, finalImage, image.size());
+            composite.release();
+            resized.release();
 
             return converter.convert(finalImage);
 
