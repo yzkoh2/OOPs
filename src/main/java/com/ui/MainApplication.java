@@ -725,6 +725,7 @@ public class MainApplication {
                     get(); // Check for exceptions
                     updatePreview();
                     updateUndoRedoButtons();
+                    layoutSourceFrame = currentPhoto.getProcessedFrame().clone();
                     statusLabel.setText("Background processed and image resized successfully");
                 } catch (InterruptedException | ExecutionException ex) {
                     JOptionPane.showMessageDialog(
