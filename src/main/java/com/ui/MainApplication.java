@@ -56,6 +56,7 @@ import javax.swing.UIManager;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.TitledBorder;
 import javax.swing.filechooser.FileNameExtensionFilter;
+import javax.swing.JSplitPane;
 
 import org.bytedeco.javacv.Frame;
 import org.bytedeco.javacv.Java2DFrameConverter;
@@ -180,11 +181,25 @@ public class MainApplication {
 
         // Create preview panel
         JPanel previewPanel = createPreviewPanel();
-        mainPanel.add(previewPanel, BorderLayout.CENTER);
-
-        // Create control panel
+        
+        // Create control panel and ensure it's horizontally scrollable
         controlPanel = createControlPanel();
-        mainPanel.add(controlPanel, BorderLayout.EAST);
+        
+        // The controlPanel variable is actually already a JScrollPane
+        // Enable horizontal scrolling
+        controlPanel.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        
+        // Create JSplitPane to allow resizing
+        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, true, previewPanel, controlPanel);
+        splitPane.setOneTouchExpandable(true);
+        splitPane.setResizeWeight(0.85); // Preview panel gets 85% of space initially
+        
+        // Set divider location as a percentage of the available space
+        int initialDividerLocation = (int)(config.getIntProperty("ui.window.width", Constants.DEFAULT_WINDOW_WIDTH) * 0.8);
+        splitPane.setDividerLocation(initialDividerLocation);
+        System.out.println("Control Panel Initial Width: " + controlPanel.getPreferredSize().width);
+        // Add the split pane to the main panel
+        mainPanel.add(splitPane, BorderLayout.CENTER);
 
         // Create status panel
         statusPanel = new JPanel(new BorderLayout());
@@ -464,8 +479,9 @@ public class MainApplication {
         // Wrap everything in a scroll pane
         JScrollPane scrollPane = new JScrollPane(panel);
         scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
-        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED); // Changed to AS_NEEDED
         scrollPane.getVerticalScrollBar().setUnitIncrement(16); // Smoother scrolling
+        scrollPane.getHorizontalScrollBar().setUnitIncrement(16); // Same for horizontal
 
         return scrollPane;
     }
