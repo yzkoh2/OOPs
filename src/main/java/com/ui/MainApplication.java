@@ -858,109 +858,170 @@ public class MainApplication {
     // method
     // Here's the corrected version:
 
-    private void handleProcessBackgroundAndResize(ActionEvent e) {
-        if (currentPhoto == null) {
-            JOptionPane.showMessageDialog(mainFrame, "No image loaded.", "Error", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
+    // Updated handleProcessBackgroundAndResize method in MainApplication.java
+    // This creates a two-step processing approach for background images
 
-        // --- Get User Inputs (in millimeters) ---
-        int targetWidthMM, targetHeightMM;
-        try {
-            targetWidthMM = Integer.parseInt(widthField.getText().trim());
-            targetHeightMM = Integer.parseInt(heightField.getText().trim());
-            if (targetWidthMM <= 0 || targetHeightMM <= 0) {
-                throw new NumberFormatException("Dimensions must be positive.");
-            }
-        } catch (NumberFormatException ex) {
+// Updated handleProcessBackgroundAndResize method in MainApplication.java
+// With fixes for final variables referenced from inner classes
+
+private void handleProcessBackgroundAndResize(ActionEvent e) {
+    if (currentPhoto == null) {
+        JOptionPane.showMessageDialog(mainFrame, "No image loaded.", "Error", JOptionPane.ERROR_MESSAGE);
+        return;
+    }
+
+    // --- Get User Inputs (in millimeters) ---
+    int targetWidthMM, targetHeightMM;
+    try {
+        targetWidthMM = Integer.parseInt(widthField.getText().trim());
+        targetHeightMM = Integer.parseInt(heightField.getText().trim());
+        if (targetWidthMM <= 0 || targetHeightMM <= 0) {
+            throw new NumberFormatException("Dimensions must be positive.");
+        }
+    } catch (NumberFormatException ex) {
+        JOptionPane.showMessageDialog(mainFrame,
+                "Invalid dimensions entered. Please enter positive numbers.",
+                "Input Error",
+                JOptionPane.ERROR_MESSAGE);
+        return;
+    }
+
+    // Convert MM to pixels using the PIXELS_PER_MM constant
+    final int targetWidth = targetWidthMM * Constants.PIXELS_PER_MM;
+    final int targetHeight = targetHeightMM * Constants.PIXELS_PER_MM;
+
+    // Validate background image if that type is selected
+    final boolean useBackgroundImage = backgroundSettings.getType() == BackgroundSettings.BackgroundType.CUSTOM_IMAGE;
+    final String originalBackgroundImagePath;
+    final BackgroundSettings.BackgroundType originalBackgroundType = backgroundSettings.getType();
+    
+    // Initialize to null, then conditionally set if using background image
+    if (useBackgroundImage) {
+        String bgImagePath = backgroundSettings.getBackgroundImagePath();
+        if (bgImagePath == null || bgImagePath.isEmpty()) {
             JOptionPane.showMessageDialog(mainFrame,
-                    "Invalid dimensions entered. Please enter positive numbers.",
-                    "Input Error",
+                    "Please select a background image.",
+                    "Missing Background Image",
                     JOptionPane.ERROR_MESSAGE);
             return;
         }
-
-        // Validate background image if that type is selected
-        if (backgroundSettings.getType() == BackgroundSettings.BackgroundType.CUSTOM_IMAGE) {
-            String bgImagePath = backgroundSettings.getBackgroundImagePath();
-            if (bgImagePath == null || bgImagePath.isEmpty()) {
-                JOptionPane.showMessageDialog(mainFrame,
-                        "Please select a background image.",
-                        "Missing Background Image",
-                        JOptionPane.ERROR_MESSAGE);
-                return;
-            }
-
-            // Check if the file exists
-            File bgImageFile = new File(bgImagePath);
-            if (!bgImageFile.exists() || !bgImageFile.isFile()) {
-                JOptionPane.showMessageDialog(mainFrame,
-                        "Background image file not found: " + bgImagePath,
-                        "File Not Found",
-                        JOptionPane.ERROR_MESSAGE);
-                return;
-            }
+        
+        // Check if the file exists
+        File bgImageFile = new File(bgImagePath);
+        if (!bgImageFile.exists() || !bgImageFile.isFile()) {
+            JOptionPane.showMessageDialog(mainFrame,
+                    "Background image file not found: " + bgImagePath,
+                    "File Not Found",
+                    JOptionPane.ERROR_MESSAGE);
+            return;
         }
+        
+        // Store the original background image path
+        originalBackgroundImagePath = bgImagePath;
+    } else {
+        // Must initialize even when not used
+        originalBackgroundImagePath = null;
+    }
 
-        // Convert MM to pixels using the PIXELS_PER_MM constant
-        int targetWidth = targetWidthMM * Constants.PIXELS_PER_MM;
-        int targetHeight = targetHeightMM * Constants.PIXELS_PER_MM;
+    // --- Process in Background ---
+    photoHistory.saveState(currentPhoto); // Save state before combined action
+    statusLabel.setText("Processing background and resizing...");
 
-        // --- Process in Background ---
-        photoHistory.saveState(currentPhoto); // Save state before combined action
-        statusLabel.setText("Processing background and resizing...");
-
-        SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>() {
-            @Override
-            protected Void doInBackground() throws Exception {
-                try {
-                    // Step 1: Remove Background using the selected background settings
-                    BackgroundRemover remover = new BackgroundRemover(
+    SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>() {
+        @Override
+        protected Void doInBackground() throws Exception {
+            try {
+                // STEP 1: If using background image, first apply with solid color background
+                if (useBackgroundImage) {
+                    // Temporarily change settings to use a solid color
+                    backgroundSettings.setType(BackgroundSettings.BackgroundType.SOLID_COLOR);
+                    
+                    // Process with solid white background first
+                    BackgroundRemover solidColorRemover = new BackgroundRemover(
                             backgroundSettings,
-                            "model/modnet.onnx");
-                    remover.process(currentPhoto);
-
-                    // Step 2: Scale the result to user dimensions
-                    // IMPORTANT FIX: Pass the background color from settings to ensure consistent
-                    // background
+                            "model/modnet.onnx"
+                    );
+                    solidColorRemover.process(currentPhoto);
+                    
+                    // Scale the result first
                     ImageResizer resizer = new ImageResizer(
                             targetWidth,
                             targetHeight,
-                            true, // true = maintain aspect ratio (scale, don't crop)
-                            backgroundSettings.getBackgroundColor() // Use the same background color chosen by user
+                            true, // maintain aspect ratio
+                            backgroundSettings.getBackgroundColor()
                     );
                     resizer.process(currentPhoto);
-
-                    return null;
-                } catch (Exception ex) {
-                    throw new Exception("Processing failed: " + ex.getMessage(), ex);
+                    
+                    // Now restore the settings to use the background image
+                    backgroundSettings.setType(BackgroundSettings.BackgroundType.CUSTOM_IMAGE);
+                    backgroundSettings.setBackgroundImagePath(originalBackgroundImagePath);
+                    
+                    // Apply the background image as a second pass
+                    BackgroundRemover imageRemover = new BackgroundRemover(
+                            backgroundSettings,
+                            "model/modnet.onnx"
+                    );
+                    imageRemover.process(currentPhoto);
+                } else {
+                    // Normal single-pass processing for solid color background
+                    BackgroundRemover remover = new BackgroundRemover(
+                            backgroundSettings,
+                            "model/modnet.onnx"
+                    );
+                    remover.process(currentPhoto);
+                    
+                    // Scale the result
+                    ImageResizer resizer = new ImageResizer(
+                            targetWidth,
+                            targetHeight,
+                            true, // maintain aspect ratio
+                            backgroundSettings.getBackgroundColor()
+                    );
+                    resizer.process(currentPhoto);
                 }
-            }
 
-            @Override
-            protected void done() {
-                try {
-                    get(); // Check for exceptions
-                    updatePreview();
-                    updateUndoRedoButtons();
-                    layoutSourceFrame = currentPhoto.getProcessedFrame().clone();
-                    statusLabel.setText("Background processed and image resized successfully");
-                } catch (InterruptedException | ExecutionException ex) {
-                    JOptionPane.showMessageDialog(
-                            mainFrame,
-                            "Error during processing: " + ex.getCause().getMessage(),
-                            "Processing Error",
-                            JOptionPane.ERROR_MESSAGE);
-                    statusLabel.setText("Processing failed");
-                    updatePreview();
-                    updateUndoRedoButtons();
+                return null;
+            } catch (Exception ex) {
+                // Make sure to restore original settings even if processing fails
+                if (useBackgroundImage) {
+                    backgroundSettings.setType(originalBackgroundType);
+                    backgroundSettings.setBackgroundImagePath(originalBackgroundImagePath);
                 }
+                throw new Exception("Processing failed: " + ex.getMessage(), ex);
             }
-        };
+        }
 
-        worker.execute();
-    }
+        @Override
+        protected void done() {
+            try {
+                get(); // Check for exceptions
+                updatePreview();
+                updateUndoRedoButtons();
+                layoutSourceFrame = currentPhoto.getProcessedFrame().clone();
+                statusLabel.setText("Background processed and image resized successfully");
+                
+                // Make sure UI reflects correct settings if we've changed them
+                if (useBackgroundImage) {
+                    solidColorRadio.setSelected(false);
+                    imageBackgroundRadio.setSelected(true);
+                    updateBackgroundControlsState();
+                }
+            } catch (InterruptedException | ExecutionException ex) {
+                JOptionPane.showMessageDialog(
+                        mainFrame,
+                        "Error during processing: " + ex.getCause().getMessage(),
+                        "Processing Error",
+                        JOptionPane.ERROR_MESSAGE
+                );
+                statusLabel.setText("Processing failed");
+                updatePreview();
+                updateUndoRedoButtons();
+            }
+        }
+    };
 
+    worker.execute();
+}
     private void generateLayoutSheet(String layoutOption) {
         statusLabel.setText("Generating layout sheet...");
 
