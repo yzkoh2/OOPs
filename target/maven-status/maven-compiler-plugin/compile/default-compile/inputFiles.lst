@@ -1,28 +1,26 @@
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/entities/ExportSettings.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/editor/PhotoHistory.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/editor/InteractivePhotoEnhancer.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/util/ImageUtils.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/cloud/CloudServiceFactory.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/gui/EnhancementPanel.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/util/Constants.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/entities/BatchStatus.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/gui/BatchProcessingPanel.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/editor/ImageExporter.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/entities/BackgroundSettings.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/editor/BackgroundEditor.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/main/App.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/editor/BackgroundRemover.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/main/Main.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/config/ApplicationConfig.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/cloud/CloudStorageService.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/editor/ONNXMattePredictor.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/editor/ImageProcessor.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/util/FileUtils.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/cloud/impl/GoogleDriveCloudStorageService.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/gui/GUI.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/editor/EraserTool.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/editor/BatchProcessor.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/ui/MainApplication.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/editor/PhotoEnhancer.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/editor/ImageResizer.java
-/Users/kohyongzhao/Documents/Y2 S2/IS442/OOP/src/main/java/com/entities/Photo.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\config\ApplicationConfig.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\cloud\CloudStorageService.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\entities\BatchStatus.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\util\FileUtils.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\editor\EraserTool.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\util\ImageUtils.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\cloud\impl\GoogleDriveCloudStorageService.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\editor\BatchProcessor.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\editor\ImageExporter.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\editor\BackgroundRemover.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\main\Main.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\editor\ImageProcessor.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\editor\ONNXMattePredictor.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\util\Constants.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\editor\PhotoHistory.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\entities\BackgroundSettings.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\ui\MainApplication.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\editor\PhotoEnhancer.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\gui\GUI.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\editor\ImageResizer.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\entities\ExportSettings.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\entities\Photo.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\cloud\CloudServiceFactory.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\main\App.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\gui\BatchProcessingPanel.java
+A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\editor\BackgroundEditor.java
