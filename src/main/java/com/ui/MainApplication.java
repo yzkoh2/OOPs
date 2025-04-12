@@ -314,10 +314,6 @@ public class MainApplication {
         batchButton.addActionListener(this::handleBatchProcess);
         filePanel.add(batchButton);
 
-        JButton saveButton = new JButton("Save Image");
-        saveButton.addActionListener(this::handleSaveImage);
-        filePanel.add(saveButton);
-
         panel.add(filePanel);
         panel.add(Box.createRigidArea(new Dimension(0, 10)));
 
@@ -458,6 +454,10 @@ public class MainApplication {
         exportPanel.add(new JLabel("Layout:"));
         exportPanel.add(layoutDropdown);
         exportPanel.add(generateSheetButton);
+
+        JButton saveButton = new JButton("Save Image");
+        saveButton.addActionListener(this::handleSaveImage);
+        exportPanel.add(saveButton);
 
         // Wrap everything in a scroll pane
         JScrollPane scrollPane = new JScrollPane(panel);
