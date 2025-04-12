@@ -79,6 +79,7 @@ import com.entities.Photo;
 import com.gui.BatchProcessingPanel;
 import com.util.Constants;
 import com.util.FileUtils;
+import com.gui.EnhancementPanel;
 
 public class MainApplication {
 
@@ -393,6 +394,17 @@ public class MainApplication {
         processPanel.add(resetButton);
 
         panel.add(processPanel);
+
+// --- Step 3b: Enhance ---
+JPanel enhancePanel = new JPanel(new GridLayout(0, 1, 5, 5));
+enhancePanel.setBorder(BorderFactory.createTitledBorder("Step 3b: Enhance Photo (Optional)"));
+
+JButton interactiveEnhanceButton = new JButton("Enhance Photo Interactively");
+interactiveEnhanceButton.setToolTipText("Adjust brightness, contrast, and skin smoothing");
+interactiveEnhanceButton.addActionListener(this::handleInteractiveEnhancement);
+enhancePanel.add(interactiveEnhanceButton);
+
+panel.add(enhancePanel);
         panel.add(Box.createRigidArea(new Dimension(0, 10)));
 
         // --- Step 4: Export ---
@@ -691,6 +703,7 @@ public class MainApplication {
             currentPhoto = previousState;
             updatePreview();
             updateUndoRedoButtons();
+            layoutSourceFrame = currentPhoto.getProcessedFrame().clone();
             statusLabel.setText("Undo completed");
         }
     }
@@ -1947,4 +1960,42 @@ public class MainApplication {
                     JOptionPane.ERROR_MESSAGE);
         }
     }
+/**
+ * Handle interactive photo enhancement with sliders
+ */
+private void handleInteractiveEnhancement(ActionEvent e) {
+    if (currentPhoto == null) {
+        JOptionPane.showMessageDialog(mainFrame, "No image loaded.", "Error", JOptionPane.ERROR_MESSAGE);
+        return;
+    }
+
+    if (currentPhoto.getProcessedFrame() == null) {
+        JOptionPane.showMessageDialog(mainFrame, "Invalid image data. Please reload or recrop.", 
+                                    "Error", JOptionPane.ERROR_MESSAGE);
+        return;
+    }
+
+    // Save to history BEFORE opening the enhancement panel
+    // This ensures undo goes back to this exact state
+    photoHistory.saveState(currentPhoto);
+
+    // Create and show the interactive enhancement panel
+    EnhancementPanel enhancementPanel = new EnhancementPanel(
+        mainFrame, 
+        currentPhoto.getProcessedFrame(),
+        enhancedFrame -> {
+            // This is called when the user confirms the enhancement
+            // Just apply the enhanced frame without saving to history again
+            currentPhoto.setProcessedFrame(enhancedFrame);
+            
+            // Update UI
+            updatePreview();
+            updateUndoRedoButtons(); 
+            layoutSourceFrame = currentPhoto.getProcessedFrame().clone();
+            statusLabel.setText("Photo enhancement applied. Use Undo (Ctrl+Z) to revert if needed.");
+        }
+    );
+    
+    enhancementPanel.setVisible(true);
+}
 }

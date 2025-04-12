@@ -97,29 +97,111 @@ public class Photo implements Cloneable {
         try {
             Photo clone = (Photo) super.clone();
 
-            // Deep copy the original BufferedImage
+            // Deep copy the original BufferedImage (remains the same)
             if (this.originalBufferedImage != null) {
-                // Create a new BufferedImage with the same properties
                 BufferedImage copy = new BufferedImage(
                         this.originalBufferedImage.getWidth(),
                         this.originalBufferedImage.getHeight(),
                         this.originalBufferedImage.getType());
-
-                // Copy the pixel data
                 copy.getGraphics().drawImage(this.originalBufferedImage, 0, 0, null);
                 clone.originalBufferedImage = copy;
             }
 
-            // Deep copy the processed frame
-            if (this.processedFrame != null) {
-                // Convert to BufferedImage and back for clean copy
-                BufferedImage temp = java2DConverter.convert(this.processedFrame);
-                clone.processedFrame = java2DConverter.convert(temp);
+            // Deep copy the processed frame (Corrected Frame -> BufferedImage -> Frame -> Mat -> Clone -> Frame strategy)
+            if (this.processedFrame != null &&
+                this.processedFrame.image != null &&
+                this.processedFrame.image.length > 0 &&
+                this.processedFrame.image[0] != null &&
+                this.processedFrame.image[0].limit() > 0) {
+
+                Mat matToClone = null;
+                Mat clonedMat = null;
+                Frame intermediateFrame = null; // Added for clarity
+                Frame finalClonedFrame = null;
+
+                try {
+                    System.out.println("Photo.clone: Attempting Frame->BufferedImage->Frame->Mat strategy...");
+
+                    // 1. Frame to BufferedImage
+                    BufferedImage tempBufferedImage = java2DConverter.convert(this.processedFrame);
+
+                    if (tempBufferedImage != null) {
+                        // --- START CORRECTION ---
+                        // 2a. Convert BufferedImage back to an intermediate Frame using Java2D converter
+                        intermediateFrame = java2DConverter.convert(tempBufferedImage);
+
+                        // 2b. Convert the intermediate Frame to Mat using the Mat converter
+                        if (intermediateFrame != null) {
+                            matToClone = matConverter.convert(intermediateFrame); // Use matConverter HERE
+                            System.out.println("Photo.clone: Converted intermediate Frame to Mat.");
+                        } else {
+                            System.err.println("Photo.clone: Failed to convert BufferedImage back to intermediate Frame.");
+                            matToClone = null; // Ensure matToClone is null if intermediateFrame is null
+                        }
+                        // --- END CORRECTION ---
+
+                        if (matToClone != null && !matToClone.isNull() && matToClone.cols() > 0 && matToClone.rows() > 0) {
+                            // 3. Clone the Mat derived from BufferedImage path
+                            clonedMat = matToClone.clone();
+                            System.out.println("Photo.clone: Cloned Mat successfully.");
+
+                            // 4. Convert Cloned Mat back to Frame
+                            finalClonedFrame = matConverter.convert(clonedMat);
+                            System.out.println("Photo.clone: Converted cloned Mat back to Frame.");
+
+                        } else {
+                            // This path is taken if matToClone is null or invalid
+                            System.err.println("Photo.clone: Failed to get valid Mat from intermediate Frame.");
+                        }
+                    } else {
+                        System.err.println("Photo.clone: Failed to convert Frame to BufferedImage.");
+                    }
+
+                } catch (Exception e) {
+                     System.err.println("Error during Frame->BufferedImage->Frame->Mat cloning in Photo.clone: " + e.getMessage());
+                     finalClonedFrame = null; // Ensure null on error
+                } finally {
+                   // Release intermediate Mats that were definitely created
+                   if (clonedMat != null && !clonedMat.isNull()) clonedMat.release();
+                   if (matToClone != null && !matToClone.isNull()) matToClone.release();
+                   // intermediateFrame typically doesn't need manual release when created via converter
+                }
+
+                // If the primary strategy failed, fall back to just BufferedImage copy
+                if (finalClonedFrame == null) {
+                    System.err.println("Photo.clone: Falling back to Frame->BufferedImage->Frame cloning.");
+                    try {
+                       // Fallback: Frame -> BufferedImage -> Frame
+                       BufferedImage temp = java2DConverter.convert(this.processedFrame);
+                       if (temp != null) {
+                           finalClonedFrame = java2DConverter.convert(temp);
+                           System.out.println("Photo.clone: Fallback cloning successful.");
+                       } else {
+                           System.err.println("Photo.clone: Fallback Frame->BufferedImage failed.");
+                           finalClonedFrame = null;
+                       }
+                    } catch (Exception fallbackEx) {
+                       System.err.println("Error during fallback BufferedImage cloning: " + fallbackEx.getMessage());
+                       finalClonedFrame = null;
+                    }
+                }
+
+                clone.processedFrame = finalClonedFrame; // Assign the result (or null if all failed)
+
+            } else {
+                System.err.println("Warning: Source processedFrame is null or invalid in Photo.clone.");
+                clone.processedFrame = null;
             }
+
+            // Copy other fields
+            clone.fileName = this.fileName;
+            clone.uploadTime = this.uploadTime;
+            clone.width = this.width;
+            clone.height = this.height;
+            clone.sourceFile = this.sourceFile;
 
             return clone;
         } catch (CloneNotSupportedException e) {
-            // This should not happen since we implement Cloneable
             throw new RuntimeException("Failed to clone Photo", e);
         }
     }
