@@ -287,146 +287,140 @@ public class MainApplication {
                 TitledBorder.LEFT,
                 TitledBorder.TOP
         ));
-        panel.setPreferredSize(new Dimension(Constants.CONTROL_PANEL_WIDTH, -1));
-
+    
+        // Optional: restrict max width, let height grow naturally
+        panel.setMaximumSize(new Dimension(Constants.CONTROL_PANEL_WIDTH, Integer.MAX_VALUE));
+    
         // --- File Controls ---
         JPanel filePanel = new JPanel(new GridLayout(0, 1, 5, 5));
         filePanel.setBorder(BorderFactory.createTitledBorder("File"));
-
+    
         JButton openButton = new JButton("Open Image");
         openButton.addActionListener(this::handleOpenImage);
         filePanel.add(openButton);
-        
-        // Add batch processing button
+    
         JButton batchButton = new JButton("Batch Process");
         batchButton.addActionListener(this::handleBatchProcess);
         filePanel.add(batchButton);
-
+    
         JButton saveButton = new JButton("Save Image");
         saveButton.addActionListener(this::handleSaveImage);
         filePanel.add(saveButton);
-
+    
         panel.add(filePanel);
         panel.add(Box.createRigidArea(new Dimension(0, 10)));
-
+    
         // --- History Controls ---
         JPanel historyPanel = new JPanel(new GridLayout(1, 2, 5, 5));
         historyPanel.setBorder(BorderFactory.createTitledBorder("History"));
-
+    
         undoButton = new JButton("Undo");
         undoButton.setToolTipText("Undo the last action (Ctrl+Z)");
         undoButton.addActionListener(this::handleUndo);
         undoButton.setEnabled(false);
         historyPanel.add(undoButton);
-
+    
         redoButton = new JButton("Redo");
         redoButton.setToolTipText("Redo the last undone action (Ctrl+Y)");
         redoButton.addActionListener(this::handleRedo);
         redoButton.setEnabled(false);
         historyPanel.add(redoButton);
-
+    
         panel.add(historyPanel);
         panel.add(Box.createRigidArea(new Dimension(0, 10)));
-
-        // --- Edit Controls (Step 1) ---
+    
+        // --- Step 1: Crop ---
         JPanel cropPanel = new JPanel(new GridLayout(0, 1, 5, 5));
         cropPanel.setBorder(BorderFactory.createTitledBorder("Step 1: Crop (Optional)"));
-
+    
         JButton cropButton = new JButton("Crop Image");
         cropButton.setToolTipText("Select a portion of the image to keep");
         cropButton.addActionListener(this::handleCrop);
         cropPanel.add(cropButton);
-
+    
         panel.add(cropPanel);
         panel.add(Box.createRigidArea(new Dimension(0, 10)));
-
-        // --- Background & Resize Settings (Step 2) ---
+    
+        // --- Step 2: Configure Settings ---
         JPanel processSettingsPanel = new JPanel();
         processSettingsPanel.setLayout(new BoxLayout(processSettingsPanel, BoxLayout.Y_AXIS));
         processSettingsPanel.setBorder(BorderFactory.createTitledBorder("Step 2: Configure Settings"));
-
-        // Dimension Inputs in millimeters
+    
         JPanel dimensionPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         widthField = new JTextField(5);
         heightField = new JTextField(5);
-
-        // Pre-fill with standard ID photo dimensions in mm
+    
         ApplicationConfig config = ApplicationConfig.getInstance();
         widthField.setText(String.valueOf(Constants.PASSPORT_PHOTO_WIDTH_MM));
         heightField.setText(String.valueOf(Constants.PASSPORT_PHOTO_HEIGHT_MM));
-
+    
         dimensionPanel.add(new JLabel("Width (mm):"));
         dimensionPanel.add(widthField);
         dimensionPanel.add(Box.createRigidArea(new Dimension(10, 0)));
         dimensionPanel.add(new JLabel("Height (mm):"));
         dimensionPanel.add(heightField);
         processSettingsPanel.add(dimensionPanel);
-
-        // Add the new background panel
+    
         JPanel backgroundPanel = createBackgroundPanel();
         processSettingsPanel.add(backgroundPanel);
-
-        JScrollPane settingsScrollPane = new JScrollPane(processSettingsPanel);
-        settingsScrollPane.setBorder(BorderFactory.createTitledBorder("Step 2: Configure Settings"));
-        settingsScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
-        settingsScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-        settingsScrollPane.getVerticalScrollBar().setUnitIncrement(16); // Smoother scrolling
-        
-        // Add the scrollPane to your main panel
-        panel.add(settingsScrollPane);
-
-        // --- Process Button (Step 3) ---
+    
+        panel.add(processSettingsPanel);
+        panel.add(Box.createRigidArea(new Dimension(0, 10)));
+    
+        // --- Step 3: Process ---
         JPanel processPanel = new JPanel(new GridLayout(0, 1, 5, 5));
         processPanel.setBorder(BorderFactory.createTitledBorder("Step 3: Process Image"));
-
+    
         JButton processButton = new JButton("Process Background & Resize");
         processButton.setFont(processButton.getFont().deriveFont(Font.BOLD));
         processButton.setToolTipText("Remove background, apply selected color/image, and resize to specified dimensions");
         processButton.addActionListener(this::handleProcessBackgroundAndResize);
         processPanel.add(processButton);
-
+    
         JButton resetButton = new JButton("Reset to Original");
         resetButton.setToolTipText("Discard all changes and restore the original image");
         resetButton.addActionListener(e -> handleReset());
         processPanel.add(resetButton);
-
+    
         panel.add(processPanel);
         panel.add(Box.createRigidArea(new Dimension(0, 10)));
-
-        // --- Export Settings (Step 4) ---
+    
+        // --- Step 4: Export ---
         JPanel exportPanel = new JPanel(new GridLayout(0, 1, 5, 5));
         exportPanel.setBorder(BorderFactory.createTitledBorder("Step 4: Export"));
-
+    
         JComboBox<String> formatComboBox = new JComboBox<>(Constants.SUPPORTED_OUTPUT_FORMATS);
         formatComboBox.setSelectedItem(exportSettings.getFormat().getExtension());
         formatComboBox.addActionListener(e -> {
             String format = (String) formatComboBox.getSelectedItem();
-            if ("jpg".equals(format) || "jpeg".equals(format)) {
-                exportSettings.setFormat(ExportSettings.ImageFormat.JPEG);
-            } else if ("png".equals(format)) {
-                exportSettings.setFormat(ExportSettings.ImageFormat.PNG);
-            } else if ("bmp".equals(format)) {
-                exportSettings.setFormat(ExportSettings.ImageFormat.BMP);
+            switch (format) {
+                case "jpg":
+                case "jpeg":
+                    exportSettings.setFormat(ExportSettings.ImageFormat.JPEG); break;
+                case "png":
+                    exportSettings.setFormat(ExportSettings.ImageFormat.PNG); break;
+                case "bmp":
+                    exportSettings.setFormat(ExportSettings.ImageFormat.BMP); break;
             }
         });
-
+    
         JPanel formatPanel = new JPanel(new BorderLayout());
         formatPanel.add(new JLabel("Format:"), BorderLayout.WEST);
         formatPanel.add(formatComboBox, BorderLayout.CENTER);
         exportPanel.add(formatPanel);
-
+    
         JCheckBox multipleCheckBox = new JCheckBox("Generate multiple copies", exportSettings.isGenerateMultiples());
         multipleCheckBox.addActionListener(e -> {
             exportSettings.setGenerateMultiples(multipleCheckBox.isSelected());
         });
         exportPanel.add(multipleCheckBox);
-
+    
         panel.add(exportPanel);
-
-        // Add layout export options
+    
+        // Layout sheet options
         String[] layoutOptions = {"1x1 (1 copy)", "2x2 (4 copies)", "4x6 (8 copies)", "3x4 (6 copies)"};
         JComboBox<String> layoutDropdown = new JComboBox<>(layoutOptions);
-
+    
         JButton generateSheetButton = new JButton("Generate ID Photo Sheet");
         generateSheetButton.addActionListener(e -> {
             if (currentPhoto == null) {
@@ -438,21 +432,24 @@ public class MainApplication {
                 );
                 return;
             }
-
+    
             String selectedLayout = (String) layoutDropdown.getSelectedItem();
             generateLayoutSheet(selectedLayout);
         });
-
+    
         exportPanel.add(new JLabel("Layout:"));
         exportPanel.add(layoutDropdown);
         exportPanel.add(generateSheetButton);
-
-// In createControlPanel() method, modify the return statement:
-JScrollPane scrollablePanel = new JScrollPane(panel);
-scrollablePanel.setPreferredSize(new Dimension(Constants.CONTROL_PANEL_WIDTH, -1));
-scrollablePanel.getVerticalScrollBar().setUnitIncrement(16);
-return scrollablePanel;
+    
+        // Wrap everything in a scroll pane
+        JScrollPane scrollPane = new JScrollPane(panel);
+        scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scrollPane.getVerticalScrollBar().setUnitIncrement(16); // Smoother scrolling
+    
+        return scrollPane;
     }
+    
     
     // New method for creating the background panel with options for both color and image
     private JPanel createBackgroundPanel() {
