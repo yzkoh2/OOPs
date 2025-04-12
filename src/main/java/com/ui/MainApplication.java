@@ -455,7 +455,7 @@ panel.add(enhancePanel);
         panel.add(cloudExportPanel);
 
         // Layout sheet options
-        String[] layoutOptions = { "1x1 (1 copy)", "2x2 (4 copies)", "4x6 (8 copies)", "3x4 (6 copies)" };
+        String[] layoutOptions = { "1x1 (1 copy)", "2x2 (4 copies)", "3x2 (6 copies)", "4x2 (8 copies)"  };
         JComboBox<String> layoutDropdown = new JComboBox<>(layoutOptions);
 
         JButton generateSheetButton = new JButton("Generate ID Photo Sheet");
@@ -1092,11 +1092,11 @@ panel.add(enhancePanel);
                             cols = 1;
                             rows = 1;
                             break;
-                        case "4x6 (8 copies)":
+                        case "4x2 (8 copies)":
                             cols = 4;
                             rows = 2;
                             break;
-                        case "3x4 (6 copies)":
+                        case "3x2 (6 copies)":
                             cols = 3;
                             rows = 2;
                             break;
