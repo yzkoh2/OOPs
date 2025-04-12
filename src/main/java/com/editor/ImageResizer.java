@@ -1,15 +1,14 @@
 package com.editor;
 
-import java.awt.Color;
-
 import org.bytedeco.javacv.Frame;
 import org.bytedeco.javacv.OpenCVFrameConverter;
 import org.bytedeco.opencv.global.opencv_imgproc;
 import org.bytedeco.opencv.opencv_core.Mat;
 import org.bytedeco.opencv.opencv_core.Rect;
-import org.bytedeco.opencv.opencv_core.RectVector;
+import org.bytedeco.opencv.opencv_core.Scalar;
 import org.bytedeco.opencv.opencv_core.Size;
-import org.bytedeco.opencv.opencv_objdetect.CascadeClassifier;
+
+import java.awt.Color;
 
 public class ImageResizer implements ImageProcessor {
 
@@ -26,7 +25,7 @@ public class ImageResizer implements ImageProcessor {
     public ImageResizer(int targetWidth, int targetHeight, boolean maintainAspectRatio) {
         this(targetWidth, targetHeight, maintainAspectRatio, Color.WHITE);
     }
-
+    
     /**
      * Constructor for simple resizing (scaling) with custom background color
      */
@@ -44,7 +43,7 @@ public class ImageResizer implements ImageProcessor {
     public ImageResizer(Rect cropRect, int targetWidth, int targetHeight, boolean maintainAspectRatio) {
         this(cropRect, targetWidth, targetHeight, maintainAspectRatio, Color.WHITE);
     }
-
+    
     /**
      * Constructor for crop + resize operations with custom background color
      */
@@ -58,81 +57,85 @@ public class ImageResizer implements ImageProcessor {
 
     @Override
     public Frame process(Frame frame) {
-        if (frame == null) throw new IllegalArgumentException("Input frame is null");
-    
         Mat image = converter.convert(frame);
-        if (image == null || image.empty()) throw new IllegalArgumentException("Converted image is empty");
-    
-        // --- STEP 1: Center crop around face if available ---
-        Rect face = detectFace(image);
-        if (face != null) {
-            int centerX = face.x() + face.width() / 2;
-            int centerY = face.y() + face.height() / 2;
-    
-            int cropWidth = Math.min(targetWidth, image.cols());
-            int cropHeight = Math.min(targetHeight, image.rows());
-    
-            int x = Math.max(0, centerX - cropWidth / 2);
-            int y = Math.max(0, centerY - cropHeight / 2);
-    
-            // Clamp to image bounds
-            if (x + cropWidth > image.cols()) x = image.cols() - cropWidth;
-            if (y + cropHeight > image.rows()) y = image.rows() - cropHeight;
-    
-            cropRect = new Rect(x, y, cropWidth, cropHeight);
-            image = new Mat(image, cropRect);
+        Mat result;
+
+        // Step 1: Apply cropping if a crop rectangle is specified
+        if (cropRect != null) {
+            // Ensure crop rectangle is within image bounds
+            Rect validRect = new Rect(
+                    Math.max(0, cropRect.x()),
+                    Math.max(0, cropRect.y()),
+                    Math.min(cropRect.width(), image.cols() - cropRect.x()),
+                    Math.min(cropRect.height(), image.rows() - cropRect.y())
+            );
+            Mat croppedImage = new Mat(image, validRect);
+            result = croppedImage.clone();
+            croppedImage.release();
+        } else {
+            result = image.clone();
         }
-    
-        // --- STEP 2: Resize with aspect ratio and padding ---
-        Mat resizedImage;
+
+        // Step 2: Resize (scale) the image
+        Mat resizedImage = new Mat();
         if (maintainAspectRatio) {
-            double scale = Math.min((double) targetWidth / image.cols(), (double) targetHeight / image.rows());
-            int newWidth = (int) (image.cols() * scale);
-            int newHeight = (int) (image.rows() * scale);
-    
-            Mat scaledImage = new Mat();
-            opencv_imgproc.resize(image, scaledImage, new Size(newWidth, newHeight));
-    
-            Mat paddedImage = new Mat(targetHeight, targetWidth, image.type(),
-                new org.bytedeco.opencv.opencv_core.Scalar(
+            // Calculate the scaling factor to fit within the target dimensions
+            // while preserving aspect ratio
+            double widthRatio = (double) targetWidth / result.cols();
+            double heightRatio = (double) targetHeight / result.rows();
+            double scaleFactor = Math.min(widthRatio, heightRatio);
+            
+            // Calculate new dimensions
+            int newWidth = (int) (result.cols() * scaleFactor);
+            int newHeight = (int) (result.rows() * scaleFactor);
+            
+            // Resize to the calculated dimensions
+            opencv_imgproc.resize(result, resizedImage, new Size(newWidth, newHeight), 
+                                 0, 0, opencv_imgproc.INTER_AREA);
+            
+            // If the scaled image is smaller than the target, create a padded image
+            // with the user-selected background color
+            if (newWidth != targetWidth || newHeight != targetHeight) {
+                // Convert Java Color to OpenCV Scalar (BGR format in OpenCV)
+                Scalar bgColorScalar = new Scalar(
                     backgroundColor.getBlue(),
                     backgroundColor.getGreen(),
                     backgroundColor.getRed(),
                     255
-                )
-            );
-    
-            int xOffset = (targetWidth - newWidth) / 2;
-            int yOffset = (targetHeight - newHeight) / 2;
-            Mat roi = new Mat(paddedImage, new Rect(xOffset, yOffset, newWidth, newHeight));
-            scaledImage.copyTo(roi);
-    
-            resizedImage = paddedImage;
+                );
+                
+                Mat paddedImage = new Mat(targetHeight, targetWidth, result.type(), bgColorScalar);
+                
+                // Position the image centered horizontally, but aligned to the bottom vertically
+                // (This is common for ID photos where we need less space at the bottom)
+                int x = (targetWidth - newWidth) / 2;  // Center horizontally
+                int y = targetHeight - newHeight;      // Align to bottom
+                
+                // Create a region of interest and copy the resized image there
+                Mat roi = new Mat(paddedImage, new Rect(x, y, newWidth, newHeight));
+                resizedImage.copyTo(roi);
+                roi.release();
+                
+                // Use the padded image as the result
+                Mat temp = resizedImage;
+                resizedImage = paddedImage;
+                temp.release();
+            }
         } else {
-            resizedImage = new Mat();
-            opencv_imgproc.resize(image, resizedImage, new Size(targetWidth, targetHeight));
+            // Just resize to target dimensions without preserving aspect ratio
+            // This will stretch/compress the image to fit exactly
+            opencv_imgproc.resize(result, resizedImage, new Size(targetWidth, targetHeight), 
+                                 0, 0, opencv_imgproc.INTER_AREA);
         }
-    
-        return converter.convert(resizedImage);
-    }
-    
-
-    private Rect detectFace(Mat image) {
-        // Load the cascade file (make sure to use the correct path for the cascade file)
-        CascadeClassifier faceCascade = new CascadeClassifier("./facialDetectionResources/haarcascade_frontalface_alt2.xml");
-        Mat grayImage = new Mat();
-        opencv_imgproc.cvtColor(image, grayImage, opencv_imgproc.COLOR_BGR2GRAY);
-
-        // Detect faces
-        RectVector faces = new RectVector();
-        faceCascade.detectMultiScale(grayImage, faces);
-
-        if (faces.size() > 0) {
-            // If faces are detected, return the largest one (or you can refine this logic)
-            return faces.get(0);
-        }
-
-        return null; // No face detected
+        
+        // Clean up
+        result.release();
+        
+        // Convert back to Frame
+        Frame outputFrame = converter.convert(resizedImage);
+        resizedImage.release();
+        
+        return outputFrame;
     }
 
 }

@@ -2,13 +2,13 @@ package com.ui;
 
 import java.awt.BasicStroke;
 import java.awt.BorderLayout;
+import java.awt.GridLayout;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
-import java.awt.GridLayout;
 import java.awt.Image;
 import java.awt.Point;
 import java.awt.Rectangle;
@@ -21,8 +21,6 @@ import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.awt.image.BufferedImage;
 import java.io.File;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.ExecutionException;
 
 import javax.swing.BorderFactory;
@@ -62,16 +60,19 @@ import org.bytedeco.opencv.opencv_core.Rect;
 
 import com.config.ApplicationConfig;
 import com.editor.BackgroundRemover;
-import com.editor.BatchProcessor;
 import com.editor.ImageExporter;
 import com.editor.ImageResizer;
 import com.editor.PhotoHistory;
 import com.entities.BackgroundSettings;
 import com.entities.ExportSettings;
 import com.entities.Photo;
-import com.gui.BatchProcessingPanel;
 import com.util.Constants;
 import com.util.FileUtils;
+
+import java.util.List;
+import java.util.ArrayList;
+import com.editor.BatchProcessor;
+import com.gui.BatchProcessingPanel;
 
 public class MainApplication {
 
@@ -729,21 +730,18 @@ return scrollablePanel;
 
     private void handleCrop(ActionEvent e) {
         if (currentPhoto == null) {
-            JOptionPane.showMessageDialog(
-                    mainFrame,
-                    "No image loaded.",
-                    "Error",
-                    JOptionPane.ERROR_MESSAGE
-            );
+            JOptionPane.showMessageDialog(mainFrame, "No image loaded.", "Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
+
+        // Save state before cropping for undo capability
+        photoHistory.saveState(currentPhoto);
+
+        // Get the current image
         BufferedImage image = currentPhoto.getProcessedBufferedImage();
 
-        // Use a predefined or dynamic maximum width and height for the crop panel
-        int maxWidth = 800;  // Max width for the panel
-        int maxHeight = 600; // Max height for the panel
-
-        // Calculate the scaling factor to maintain the aspect ratio
+        // Calculate dimensions for the preview panel
+        int maxWidth = 800, maxHeight = 600;
         double aspectRatio = (double) image.getWidth() / image.getHeight();
         int panelWidth = maxWidth;
         int panelHeight = (int) (maxWidth / aspectRatio);
@@ -753,116 +751,110 @@ return scrollablePanel;
             panelWidth = (int) (maxHeight * aspectRatio);
         }
 
-        // Scale the image to fit the crop panel, while maintaining the aspect ratio
+        // Create a scaled version for the UI
         Image scaledImage = image.getScaledInstance(panelWidth, panelHeight, Image.SCALE_SMOOTH);
         BufferedImage resizedImage = new BufferedImage(panelWidth, panelHeight, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g2d = resizedImage.createGraphics();
         g2d.drawImage(scaledImage, 0, 0, null);
         g2d.dispose();
 
-        // Store the scaling factor for later use (used for mapping crop rectangle back to original image)
+        // Calculate scale factors to map UI coordinates back to original image
         final double scaleX = (double) image.getWidth() / resizedImage.getWidth();
         final double scaleY = (double) image.getHeight() / resizedImage.getHeight();
 
+        // Create the crop selection panel
         CropPanel cropPanel = new CropPanel(resizedImage);
 
-        // Create a frame to hold the cropping panel
-        JFrame cropFrame = new JFrame("Crop Image - Click and drag to select area");
-        cropFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-        cropFrame.setLayout(new BorderLayout());
+// Create a frame for the crop UI
+JFrame cropFrame = new JFrame("Crop Image - Click and drag to select area");
+cropFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+cropFrame.setLayout(new BorderLayout());
 
-        // Add control buttons
-        JPanel buttonPanel = new JPanel();
-        JButton confirmButton = new JButton("Confirm Crop");
-        JButton cancelButton = new JButton("Cancel");
+// Add buttons
+JPanel buttonPanel = new JPanel();
+JButton confirmButton = new JButton("Confirm Crop");
+JButton cancelButton = new JButton("Cancel");
+buttonPanel.add(confirmButton);
+buttonPanel.add(cancelButton);
 
-        buttonPanel.add(confirmButton);
-        buttonPanel.add(cancelButton);
+// Assemble the frame
+cropFrame.add(new JScrollPane(cropPanel), BorderLayout.CENTER);
+cropFrame.add(buttonPanel, BorderLayout.SOUTH);
+cropFrame.pack();
+cropFrame.setLocationRelativeTo(mainFrame);
+cropFrame.setVisible(true);
 
-        // Add components to frame
-        cropFrame.add(new JScrollPane(cropPanel), BorderLayout.CENTER);
-        cropFrame.add(buttonPanel, BorderLayout.SOUTH);
+// Handle the confirm button
+confirmButton.addActionListener(confirmEvent -> {
+    Rectangle cropRect = cropPanel.getSelectionRectangle();
+    if (cropRect != null && cropRect.width > 10 && cropRect.height > 10) {
+        // Map selection coordinates back to original image
+        int originalX = (int) (cropRect.x * scaleX);
+        int originalY = (int) (cropRect.y * scaleY);
+        int originalWidth = (int) (cropRect.width * scaleX);
+        int originalHeight = (int) (cropRect.height * scaleY);
 
-        // Set frame size and make visible
-        cropFrame.setSize(Math.min(image.getWidth() + 50, 800),
-                Math.min(image.getHeight() + 100, 600));
-        cropFrame.setLocationRelativeTo(mainFrame);
-        cropFrame.setVisible(true);
+        // Create a rectangle in original image coordinates
+        Rect originalRect = new Rect(originalX, originalY, originalWidth, originalHeight);
 
-        // Handle confirm button click
-        confirmButton.addActionListener(confirmEvent -> {
-            Rectangle cropRect = cropPanel.getSelectionRectangle();
-            System.out.println("Crop Area: " + cropRect);
+        statusLabel.setText("Cropping image...");
 
-            if (cropRect != null && cropRect.width > 10 && cropRect.height > 10) {
-                // Map the crop area back to the original image size
-                int originalX = (int) (cropRect.x * scaleX);
-                int originalY = (int) (cropRect.y * scaleY);
-                int originalWidth = (int) (cropRect.width * scaleX);
-                int originalHeight = (int) (cropRect.height * scaleY);
+        // Process the crop in a background thread
+        new SwingWorker<Void, Void>() {
+            @Override
+            protected Void doInBackground() throws Exception {
+                try {
+                    // Create an ImageResizer specifically for cropping
+                    ImageResizer resizer = new ImageResizer(
+                            originalRect, // Crop rectangle
+                            originalWidth, // Target is the cropped size
+                            originalHeight,
+                            false // Exact crop (don't maintain aspect ratio)
+                    );
 
-                Rectangle originalRect = new Rectangle(originalX, originalY, originalWidth, originalHeight);
-
-                statusLabel.setText("Cropping image...");
-
-                // Use SwingWorker to process in background
-                SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>() {
-                    @Override
-                    protected Void doInBackground() throws Exception {
-                        Rect rect = new Rect(originalRect.x, originalRect.y, originalRect.width, originalRect.height);
-
-                        // Create resizer with crop rectangle
-                        ImageResizer resizer = new ImageResizer(
-                                rect,
-                                rect.width(),
-                                rect.height(),
-                                true
-                        );
-
-                        // Process the photo
-                        resizer.process(currentPhoto);
-                        return null;
-                    }
-
-                    @Override
-                    protected void done() {
-                        try {
-                            get(); // Check for exceptions
-
-                            updatePreview();
-                            updateUndoRedoButtons();
-                            layoutSourceFrame = currentPhoto.getProcessedFrame().clone();
-
-                            statusLabel.setText("Image cropped successfully");
-                        } catch (Exception ex) {
-                            JOptionPane.showMessageDialog(
-                                    mainFrame,
-                                    "Error cropping image: " + ex.getMessage(),
-                                    "Error",
-                                    JOptionPane.ERROR_MESSAGE
-                            );
-                            statusLabel.setText("Failed to crop image");
-                        }
-                    }
-
-                };
-
-                worker.execute();
-                cropFrame.dispose();
-            } else {
-                JOptionPane.showMessageDialog(
-                        cropFrame,
-                        "Please select a valid crop area (minimum 10x10 pixels).",
-                        "Invalid Selection",
-                        JOptionPane.WARNING_MESSAGE
-                );
+                    // Apply the crop
+                    resizer.process(currentPhoto);
+                    return null;
+                } catch (Exception ex) {
+                    throw new Exception("Cropping failed: " + ex.getMessage(), ex);
+                }
             }
-        });
 
-        // Handle cancel button click
-        cancelButton.addActionListener(cancelEvent -> cropFrame.dispose());
+            @Override
+            protected void done() {
+                try {
+                    get(); // Check for exceptions
+                    updatePreview();
+                    updateUndoRedoButtons();
+                    layoutSourceFrame = currentPhoto.getProcessedFrame().clone();
+
+                    statusLabel.setText("Image cropped successfully");
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(
+                            mainFrame,
+                            "Error cropping image: " + ex.getMessage(),
+                            "Error",
+                            JOptionPane.ERROR_MESSAGE
+                    );
+                    statusLabel.setText("Failed to crop image");
+                }
+            }
+        }.execute();
+
+        cropFrame.dispose();
+    } else {
+        JOptionPane.showMessageDialog(
+                cropFrame,
+                "Please select a valid crop area.",
+                "Invalid Selection",
+                JOptionPane.WARNING_MESSAGE
+        );
     }
+});
 
+// Handle the cancel button
+cancelButton.addActionListener(cancelEvent -> cropFrame.dispose());
+}
 
 // Updated handler for the Process Background and Resize button
 private void handleProcessBackgroundAndResize(ActionEvent e) {
@@ -960,7 +952,6 @@ SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>() {
             statusLabel.setText("Processing failed");
             updatePreview();
             updateUndoRedoButtons();
-            layoutSourceFrame = currentPhoto.getProcessedFrame().clone();
         }
     }
 };
