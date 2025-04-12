@@ -2,16 +2,19 @@ package com.ui;
 
 import java.awt.BasicStroke;
 import java.awt.BorderLayout;
-import java.awt.GridLayout;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.GridLayout;
 import java.awt.Image;
 import java.awt.Point;
 import java.awt.Rectangle;
+import java.awt.Toolkit;
+import java.awt.datatransfer.Clipboard;
+import java.awt.datatransfer.StringSelection;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
@@ -21,6 +24,8 @@ import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ExecutionException;
 
 import javax.swing.BorderFactory;
@@ -58,31 +63,22 @@ import org.bytedeco.javacv.OpenCVFrameConverter;
 import org.bytedeco.opencv.opencv_core.Mat;
 import org.bytedeco.opencv.opencv_core.Rect;
 
+import com.cloud.CloudServiceFactory;
+import com.cloud.CloudStorageService;
+import com.cloud.impl.GoogleDriveCloudStorageService;
 import com.config.ApplicationConfig;
 import com.editor.BackgroundRemover;
+import com.editor.BatchProcessor;
 import com.editor.ImageExporter;
 import com.editor.ImageResizer;
+import com.editor.PhotoEnhancer;
 import com.editor.PhotoHistory;
 import com.entities.BackgroundSettings;
 import com.entities.ExportSettings;
 import com.entities.Photo;
+import com.gui.BatchProcessingPanel;
 import com.util.Constants;
 import com.util.FileUtils;
-
-import java.util.List;
-import javax.swing.filechooser.FileNameExtensionFilter;
-import javax.swing.SwingWorker;
-import java.awt.datatransfer.StringSelection;
-import java.awt.datatransfer.Clipboard;
-import java.awt.Toolkit;
-import com.cloud.CloudServiceFactory;
-import com.cloud.CloudStorageService;
-import com.cloud.impl.GoogleDriveCloudStorageService;
-
-import java.util.List;
-import java.util.ArrayList;
-import com.editor.BatchProcessor;
-import com.gui.BatchProcessingPanel;
 
 public class MainApplication {
 
@@ -374,6 +370,12 @@ public class MainApplication {
         panel.add(processSettingsPanel);
         panel.add(Box.createRigidArea(new Dimension(0, 10)));
 
+        JButton enhanceButton = new JButton("Enhance Photo");
+        enhanceButton.setToolTipText("Apply noise reduction and contrast enhancement");
+        enhanceButton.addActionListener(this::handleEnhancePhoto);
+        cropPanel.add(enhanceButton);
+
+
         // --- Step 3: Process ---
         JPanel processPanel = new JPanel(new GridLayout(0, 1, 5, 5));
         processPanel.setBorder(BorderFactory.createTitledBorder("Step 3: Process Image"));
@@ -587,6 +589,51 @@ public class MainApplication {
             }
         }
     }
+
+    private void handleEnhancePhoto(ActionEvent e) {
+    if (currentPhoto == null) {
+        JOptionPane.showMessageDialog(mainFrame, "No image loaded.", "Error", JOptionPane.ERROR_MESSAGE);
+        return;
+    }
+
+    if (currentPhoto.getProcessedFrame() == null) {
+        JOptionPane.showMessageDialog(mainFrame, "Invalid image data. Please reload or recrop.", "Error", JOptionPane.ERROR_MESSAGE);
+        return;
+    }
+
+    // Save state BEFORE applying enhancement
+    photoHistory.saveState(currentPhoto);
+
+    statusLabel.setText("Enhancing photo...");
+
+    SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>() {
+        @Override
+        protected Void doInBackground() throws Exception {
+            Frame enhanced = PhotoEnhancer.enhance(currentPhoto.getProcessedFrame());
+            currentPhoto.setProcessedFrame(enhanced);
+            return null;
+        }
+
+        @Override
+        protected void done() {
+            try {
+                get();
+                updatePreview();
+                updateUndoRedoButtons();
+                layoutSourceFrame = currentPhoto.getProcessedFrame().clone();
+                statusLabel.setText("Photo enhancement complete.");
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                JOptionPane.showMessageDialog(mainFrame,
+                        "Enhancement failed: " + ex.getMessage(),
+                        "Error", JOptionPane.ERROR_MESSAGE);
+                statusLabel.setText("Enhancement failed.");
+            }
+        }
+    };
+
+    worker.execute();
+}
 
     // Add this method to update the background image preview
     private void updateBackgroundImagePreview() {
@@ -832,7 +879,9 @@ public class MainApplication {
                             );
 
                             // Apply the crop
-                            resizer.process(currentPhoto);
+                            Frame croppedFrame = resizer.process(currentPhoto.getProcessedFrame());
+                            currentPhoto.setProcessedFrame(croppedFrame);
+
                             return null;
                         } catch (Exception ex) {
                             throw new Exception("Cropping failed: " + ex.getMessage(), ex);
