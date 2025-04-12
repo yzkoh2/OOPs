@@ -6,19 +6,19 @@ import java.io.File;
  * Class to track the status of a single file in batch processing
  */
 public class BatchStatus {
-    
+
     public enum Status {
         QUEUED,
         PROCESSING,
         COMPLETED,
         FAILED
     }
-    
+
     private final File inputFile;
     private File outputFile;
     private Status status;
     private String errorMessage;
-    
+
     /**
      * Create a new BatchStatus for a file
      * 
@@ -28,14 +28,14 @@ public class BatchStatus {
         this.inputFile = inputFile;
         this.status = Status.QUEUED;
     }
-    
+
     /**
      * Mark this file as currently being processed
      */
     public void markProcessing() {
         this.status = Status.PROCESSING;
     }
-    
+
     /**
      * Mark this file as successfully completed
      * 
@@ -45,7 +45,7 @@ public class BatchStatus {
         this.status = Status.COMPLETED;
         this.outputFile = outputFile;
     }
-    
+
     /**
      * Mark this file as failed with an error message
      * 
@@ -55,25 +55,25 @@ public class BatchStatus {
         this.status = Status.FAILED;
         this.errorMessage = errorMessage;
     }
-    
+
     // Getters
-    
+
     public File getInputFile() {
         return inputFile;
     }
-    
+
     public File getOutputFile() {
         return outputFile;
     }
-    
+
     public Status getStatus() {
         return status;
     }
-    
+
     public String getErrorMessage() {
         return errorMessage;
     }
-    
+
     /**
      * Get a string representation of the status
      * 

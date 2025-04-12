@@ -14,7 +14,7 @@ public class FileUtils {
             directory.mkdirs();
         }
     }
-    
+
     public static Photo loadPhoto(File file) throws IOException {
         try (FFmpegFrameGrabber grabber = new FFmpegFrameGrabber(file)) {
             grabber.start();
@@ -25,7 +25,7 @@ public class FileUtils {
             return new Photo(frame, file.getName(), file);
         }
     }
-    
+
     public static String getFileExtension(File file) {
         String name = file.getName();
         int lastDotIndex = name.lastIndexOf('.');
@@ -34,17 +34,17 @@ public class FileUtils {
         }
         return "";
     }
-    
+
     public static boolean isImageFile(File file) {
         if (!file.isFile()) {
             return false;
         }
-        
+
         String extension = getFileExtension(file);
-        return extension.equals("jpg") || 
-               extension.equals("jpeg") || 
-               extension.equals("png") || 
-               extension.equals("bmp") || 
-               extension.equals("gif");
+        return extension.equals("jpg") ||
+                extension.equals("jpeg") ||
+                extension.equals("png") ||
+                extension.equals("bmp") ||
+                extension.equals("gif");
     }
 }

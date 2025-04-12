@@ -27,34 +27,34 @@ public class BatchProcessor {
     private final List<File> inputFiles;
     private final String outputDir;
     private final ExecutorService executor;
-    
+
     // For progress tracking
     private int totalFiles;
     private int processedFiles;
     private Consumer<Integer> progressCallback;
     private Consumer<List<File>> completionCallback;
     private Consumer<String> errorCallback;
-    
+
     /**
      * Constructor for BatchProcessor
      * 
-     * @param inputFiles List of input image files to process
-     * @param outputDir Directory to save processed files
-     * @param backgroundSettings Background removal settings
-     * @param exportSettings Export settings
-     * @param targetWidthMM Target width in millimeters
-     * @param targetHeightMM Target height in millimeters
+     * @param inputFiles          List of input image files to process
+     * @param outputDir           Directory to save processed files
+     * @param backgroundSettings  Background removal settings
+     * @param exportSettings      Export settings
+     * @param targetWidthMM       Target width in millimeters
+     * @param targetHeightMM      Target height in millimeters
      * @param maintainAspectRatio Whether to maintain aspect ratio during resize
      */
     public BatchProcessor(
-            List<File> inputFiles, 
+            List<File> inputFiles,
             String outputDir,
-            BackgroundSettings backgroundSettings, 
+            BackgroundSettings backgroundSettings,
             ExportSettings exportSettings,
-            int targetWidthMM, 
+            int targetWidthMM,
             int targetHeightMM,
             boolean maintainAspectRatio) {
-        
+
         this.inputFiles = new ArrayList<>(inputFiles);
         this.outputDir = outputDir;
         this.backgroundSettings = backgroundSettings;
@@ -62,27 +62,28 @@ public class BatchProcessor {
         this.targetWidth = targetWidthMM * Constants.PIXELS_PER_MM;
         this.targetHeight = targetHeightMM * Constants.PIXELS_PER_MM;
         this.maintainAspectRatio = maintainAspectRatio;
-        
+
         this.totalFiles = inputFiles.size();
         this.processedFiles = 0;
-        
+
         // Create a thread pool with a reasonable number of threads
         // (number of available processors, but at least 2)
         int numThreads = Math.max(2, Runtime.getRuntime().availableProcessors());
         this.executor = Executors.newFixedThreadPool(numThreads);
     }
-    
+
     /**
      * Set a callback to be called whenever progress is made
      * 
-     * @param callback Consumer taking an integer representing progress percentage (0-100)
+     * @param callback Consumer taking an integer representing progress percentage
+     *                 (0-100)
      * @return this BatchProcessor for method chaining
      */
     public BatchProcessor onProgress(Consumer<Integer> callback) {
         this.progressCallback = callback;
         return this;
     }
-    
+
     /**
      * Set a callback to be called when processing is complete
      * 
@@ -93,7 +94,7 @@ public class BatchProcessor {
         this.completionCallback = callback;
         return this;
     }
-    
+
     /**
      * Set a callback to be called when an error occurs
      * 
@@ -104,153 +105,155 @@ public class BatchProcessor {
         this.errorCallback = callback;
         return this;
     }
-    
+
     /**
      * Start batch processing all files
      */
-// This updated version of the BatchProcessor.process() method applies the same
-// two-step workflow for background image processing
-// Add this to com/editor/BatchProcessor.java
+    // This updated version of the BatchProcessor.process() method applies the same
+    // two-step workflow for background image processing
+    // Add this to com/editor/BatchProcessor.java
 
-/**
- * Start batch processing all files
- */
-// This updated version of the BatchProcessor.process() method applies the same
-// two-step workflow for background image processing
-// Add this to com/editor/BatchProcessor.java
+    /**
+     * Start batch processing all files
+     */
+    // This updated version of the BatchProcessor.process() method applies the same
+    // two-step workflow for background image processing
+    // Add this to com/editor/BatchProcessor.java
 
-/**
- * Start batch processing all files
- */
-public void process() {
-    // Create a list to hold the CompletableFuture for each file processing task
-    List<CompletableFuture<File>> futures = new ArrayList<>();
-    // Create a list to track successfully processed output files
-    List<File> outputFiles = new ArrayList<>();
-    
-    // Make sure output directory exists
-    FileUtils.ensureDirectoryExists(outputDir);
-    
-    // Check if we're using a background image
-    final boolean useBackgroundImage = backgroundSettings.getType() == BackgroundSettings.BackgroundType.CUSTOM_IMAGE;
-    final String originalBackgroundImagePath;
-    final BackgroundSettings.BackgroundType originalType;
-    
-    if (useBackgroundImage) {
-        // Store original settings
-        originalBackgroundImagePath = backgroundSettings.getBackgroundImagePath();
-        originalType = backgroundSettings.getType();
-    } else {
-        // Initialize to avoid "might not be initialized" compiler errors
-        originalBackgroundImagePath = null;
-        originalType = null;
-    }
-    
-    // Process each file
-    for (File inputFile : inputFiles) {
-        CompletableFuture<File> future = CompletableFuture.supplyAsync(() -> {
-            try {
-                // Load the photo
-                Photo photo = FileUtils.loadPhoto(inputFile);
-                
-                if (useBackgroundImage) {
-                    // STEP 1: First process with solid white background
-                    BackgroundSettings tempSettings = new BackgroundSettings();
-                    tempSettings.setType(BackgroundSettings.BackgroundType.SOLID_COLOR);
-                    tempSettings.setBackgroundColor(Color.WHITE);
-                    
-                    // Apply solid background first
-                    BackgroundRemover solidColorRemover = new BackgroundRemover(
-                            tempSettings,
-                            "model/modnet.onnx");
-                    solidColorRemover.process(photo);
-                    
-                    // Resize with solid background
-                    ImageResizer resizer = new ImageResizer(
-                            targetWidth,
-                            targetHeight,
-                            maintainAspectRatio,
-                            tempSettings.getBackgroundColor());
-                    resizer.process(photo);
-                    
-                    // STEP 2: Now apply the background image
-                    // Use a copy of the original background settings to avoid modifying shared state
-                    BackgroundSettings imageSettings = new BackgroundSettings();
-                    imageSettings.setType(BackgroundSettings.BackgroundType.CUSTOM_IMAGE);
-                    imageSettings.setBackgroundImagePath(originalBackgroundImagePath);
-                    
-                    BackgroundRemover imageRemover = new BackgroundRemover(
-                            imageSettings,
-                            "model/modnet.onnx");
-                    imageRemover.process(photo);
-                } else {
-                    // Single-pass processing for solid color backgrounds
-                    BackgroundRemover remover = new BackgroundRemover(
-                            backgroundSettings, 
-                            "model/modnet.onnx");
-                    remover.process(photo);
-                    
-                    // Resize the photo - USE THE SAME BACKGROUND COLOR FOR PADDING!
-                    ImageResizer resizer = new ImageResizer(
-                            targetWidth,
-                            targetHeight,
-                            maintainAspectRatio,
-                            backgroundSettings.getBackgroundColor());
-                    resizer.process(photo);
-                }
-                
-                // Export the processed photo
-                String outputFileName = generateOutputFileName(inputFile);
-                String outputPath = outputDir + File.separator + outputFileName;
-                
-                ImageExporter exporter = new ImageExporter(exportSettings);
-                File outputFile = exporter.export(photo, outputPath);
-                
-                // Update progress
-                updateProgress();
-                
-                return outputFile;
-            } catch (Exception e) {
-                // Notify about the error but allow other files to continue processing
-                if (errorCallback != null) {
-                    errorCallback.accept("Error processing " + inputFile.getName() + ": " + e.getMessage());
-                }
-                // Update progress even for failed files
-                updateProgress();
-                return null;
-            }
-        }, executor);
-        
-        futures.add(future);
-    }
-    
-    // Combine all futures and handle completion
-    CompletableFuture<Void> allFutures = CompletableFuture.allOf(
-            futures.toArray(new CompletableFuture[0]));
-    
-    allFutures.thenRunAsync(() -> {
-        // Collect all successfully processed files (non-null results)
-        for (CompletableFuture<File> future : futures) {
-            try {
-                File result = future.get();
-                if (result != null) {
-                    outputFiles.add(result);
-                }
-            } catch (Exception e) {
-                // Individual file exceptions were already handled
-            }
+    /**
+     * Start batch processing all files
+     */
+    public void process() {
+        // Create a list to hold the CompletableFuture for each file processing task
+        List<CompletableFuture<File>> futures = new ArrayList<>();
+        // Create a list to track successfully processed output files
+        List<File> outputFiles = new ArrayList<>();
+
+        // Make sure output directory exists
+        FileUtils.ensureDirectoryExists(outputDir);
+
+        // Check if we're using a background image
+        final boolean useBackgroundImage = backgroundSettings
+                .getType() == BackgroundSettings.BackgroundType.CUSTOM_IMAGE;
+        final String originalBackgroundImagePath;
+        final BackgroundSettings.BackgroundType originalType;
+
+        if (useBackgroundImage) {
+            // Store original settings
+            originalBackgroundImagePath = backgroundSettings.getBackgroundImagePath();
+            originalType = backgroundSettings.getType();
+        } else {
+            // Initialize to avoid "might not be initialized" compiler errors
+            originalBackgroundImagePath = null;
+            originalType = null;
         }
-        
-        // Call completion callback with the list of successfully processed files
-        if (completionCallback != null) {
-            completionCallback.accept(outputFiles);
+
+        // Process each file
+        for (File inputFile : inputFiles) {
+            CompletableFuture<File> future = CompletableFuture.supplyAsync(() -> {
+                try {
+                    // Load the photo
+                    Photo photo = FileUtils.loadPhoto(inputFile);
+
+                    if (useBackgroundImage) {
+                        // STEP 1: First process with solid white background
+                        BackgroundSettings tempSettings = new BackgroundSettings();
+                        tempSettings.setType(BackgroundSettings.BackgroundType.SOLID_COLOR);
+                        tempSettings.setBackgroundColor(Color.WHITE);
+
+                        // Apply solid background first
+                        BackgroundRemover solidColorRemover = new BackgroundRemover(
+                                tempSettings,
+                                "model/modnet.onnx");
+                        solidColorRemover.process(photo);
+
+                        // Resize with solid background
+                        ImageResizer resizer = new ImageResizer(
+                                targetWidth,
+                                targetHeight,
+                                maintainAspectRatio,
+                                tempSettings.getBackgroundColor());
+                        resizer.process(photo);
+
+                        // STEP 2: Now apply the background image
+                        // Use a copy of the original background settings to avoid modifying shared
+                        // state
+                        BackgroundSettings imageSettings = new BackgroundSettings();
+                        imageSettings.setType(BackgroundSettings.BackgroundType.CUSTOM_IMAGE);
+                        imageSettings.setBackgroundImagePath(originalBackgroundImagePath);
+
+                        BackgroundRemover imageRemover = new BackgroundRemover(
+                                imageSettings,
+                                "model/modnet.onnx");
+                        imageRemover.process(photo);
+                    } else {
+                        // Single-pass processing for solid color backgrounds
+                        BackgroundRemover remover = new BackgroundRemover(
+                                backgroundSettings,
+                                "model/modnet.onnx");
+                        remover.process(photo);
+
+                        // Resize the photo - USE THE SAME BACKGROUND COLOR FOR PADDING!
+                        ImageResizer resizer = new ImageResizer(
+                                targetWidth,
+                                targetHeight,
+                                maintainAspectRatio,
+                                backgroundSettings.getBackgroundColor());
+                        resizer.process(photo);
+                    }
+
+                    // Export the processed photo
+                    String outputFileName = generateOutputFileName(inputFile);
+                    String outputPath = outputDir + File.separator + outputFileName;
+
+                    ImageExporter exporter = new ImageExporter(exportSettings);
+                    File outputFile = exporter.export(photo, outputPath);
+
+                    // Update progress
+                    updateProgress();
+
+                    return outputFile;
+                } catch (Exception e) {
+                    // Notify about the error but allow other files to continue processing
+                    if (errorCallback != null) {
+                        errorCallback.accept("Error processing " + inputFile.getName() + ": " + e.getMessage());
+                    }
+                    // Update progress even for failed files
+                    updateProgress();
+                    return null;
+                }
+            }, executor);
+
+            futures.add(future);
         }
-        
-        // Shutdown the executor
-        executor.shutdown();
-    });
-}
-    
+
+        // Combine all futures and handle completion
+        CompletableFuture<Void> allFutures = CompletableFuture.allOf(
+                futures.toArray(new CompletableFuture[0]));
+
+        allFutures.thenRunAsync(() -> {
+            // Collect all successfully processed files (non-null results)
+            for (CompletableFuture<File> future : futures) {
+                try {
+                    File result = future.get();
+                    if (result != null) {
+                        outputFiles.add(result);
+                    }
+                } catch (Exception e) {
+                    // Individual file exceptions were already handled
+                }
+            }
+
+            // Call completion callback with the list of successfully processed files
+            if (completionCallback != null) {
+                completionCallback.accept(outputFiles);
+            }
+
+            // Shutdown the executor
+            executor.shutdown();
+        });
+    }
+
     /**
      * Generate an output filename based on the input file
      * 
@@ -259,24 +262,24 @@ public void process() {
      */
     private String generateOutputFileName(File inputFile) {
         String baseName = inputFile.getName();
-        
+
         // Remove the extension
         int lastDotIndex = baseName.lastIndexOf('.');
         if (lastDotIndex > 0) {
             baseName = baseName.substring(0, lastDotIndex);
         }
-        
+
         // Add ID photo prefix and format extension
-        return exportSettings.getFileNamePrefix() + baseName + "." + 
-               exportSettings.getFormat().getExtension();
+        return exportSettings.getFileNamePrefix() + baseName + "." +
+                exportSettings.getFormat().getExtension();
     }
-    
+
     /**
      * Update the progress counter and notify via callback
      */
     private synchronized void updateProgress() {
         processedFiles++;
-        
+
         if (progressCallback != null) {
             int progressPercent = (processedFiles * 100) / totalFiles;
             progressCallback.accept(progressPercent);

@@ -33,7 +33,7 @@ public class BackgroundRemover implements ImageProcessor {
      * Creates a new BackgroundRemover with the specified settings and model
      * path. The model is loaded lazily when first needed.
      *
-     * @param settings Background settings (color, image path, etc.)
+     * @param settings  Background settings (color, image path, etc.)
      * @param modelPath Path to the ONNX model file
      */
     public BackgroundRemover(BackgroundSettings settings, String modelPath) {

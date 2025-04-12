@@ -70,6 +70,16 @@ import com.util.Constants;
 import com.util.FileUtils;
 
 import java.util.List;
+import javax.swing.filechooser.FileNameExtensionFilter;
+import javax.swing.SwingWorker;
+import java.awt.datatransfer.StringSelection;
+import java.awt.datatransfer.Clipboard;
+import java.awt.Toolkit;
+import com.cloud.CloudServiceFactory;
+import com.cloud.CloudStorageService;
+import com.cloud.impl.GoogleDriveCloudStorageService;
+
+import java.util.List;
 import java.util.ArrayList;
 import com.editor.BatchProcessor;
 import com.gui.BatchProcessingPanel;
@@ -116,6 +126,12 @@ public class MainApplication {
     private JFrame batchProcessingFrame;
     private BatchProcessingPanel batchPanel;
     private List<File> batchInputFiles = new ArrayList<>();
+
+    // Cloud Integration
+    private List<CloudStorageService> cloudServices;
+    private JComboBox<String> cloudServiceComboBox;
+    private JLabel authStatusLabel;
+    private JButton authButton;
 
     public static void main(String[] args) {
         // Set system look and feel
@@ -415,6 +431,10 @@ public class MainApplication {
         exportPanel.add(multipleCheckBox);
 
         panel.add(exportPanel);
+
+        // Add Cloud Export panel
+        JPanel cloudExportPanel = createCloudExportPanel();
+        panel.add(cloudExportPanel);
 
         // Layout sheet options
         String[] layoutOptions = { "1x1 (1 copy)", "2x2 (4 copies)", "4x6 (8 copies)", "3x4 (6 copies)" };
@@ -861,167 +881,163 @@ public class MainApplication {
     // Updated handleProcessBackgroundAndResize method in MainApplication.java
     // This creates a two-step processing approach for background images
 
-// Updated handleProcessBackgroundAndResize method in MainApplication.java
-// With fixes for final variables referenced from inner classes
+    // Updated handleProcessBackgroundAndResize method in MainApplication.java
+    // With fixes for final variables referenced from inner classes
 
-private void handleProcessBackgroundAndResize(ActionEvent e) {
-    if (currentPhoto == null) {
-        JOptionPane.showMessageDialog(mainFrame, "No image loaded.", "Error", JOptionPane.ERROR_MESSAGE);
-        return;
-    }
-
-    // --- Get User Inputs (in millimeters) ---
-    int targetWidthMM, targetHeightMM;
-    try {
-        targetWidthMM = Integer.parseInt(widthField.getText().trim());
-        targetHeightMM = Integer.parseInt(heightField.getText().trim());
-        if (targetWidthMM <= 0 || targetHeightMM <= 0) {
-            throw new NumberFormatException("Dimensions must be positive.");
+    private void handleProcessBackgroundAndResize(ActionEvent e) {
+        if (currentPhoto == null) {
+            JOptionPane.showMessageDialog(mainFrame, "No image loaded.", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
         }
-    } catch (NumberFormatException ex) {
-        JOptionPane.showMessageDialog(mainFrame,
-                "Invalid dimensions entered. Please enter positive numbers.",
-                "Input Error",
-                JOptionPane.ERROR_MESSAGE);
-        return;
-    }
 
-    // Convert MM to pixels using the PIXELS_PER_MM constant
-    final int targetWidth = targetWidthMM * Constants.PIXELS_PER_MM;
-    final int targetHeight = targetHeightMM * Constants.PIXELS_PER_MM;
-
-    // Validate background image if that type is selected
-    final boolean useBackgroundImage = backgroundSettings.getType() == BackgroundSettings.BackgroundType.CUSTOM_IMAGE;
-    final String originalBackgroundImagePath;
-    final BackgroundSettings.BackgroundType originalBackgroundType = backgroundSettings.getType();
-    
-    // Initialize to null, then conditionally set if using background image
-    if (useBackgroundImage) {
-        String bgImagePath = backgroundSettings.getBackgroundImagePath();
-        if (bgImagePath == null || bgImagePath.isEmpty()) {
+        // --- Get User Inputs (in millimeters) ---
+        int targetWidthMM, targetHeightMM;
+        try {
+            targetWidthMM = Integer.parseInt(widthField.getText().trim());
+            targetHeightMM = Integer.parseInt(heightField.getText().trim());
+            if (targetWidthMM <= 0 || targetHeightMM <= 0) {
+                throw new NumberFormatException("Dimensions must be positive.");
+            }
+        } catch (NumberFormatException ex) {
             JOptionPane.showMessageDialog(mainFrame,
-                    "Please select a background image.",
-                    "Missing Background Image",
+                    "Invalid dimensions entered. Please enter positive numbers.",
+                    "Input Error",
                     JOptionPane.ERROR_MESSAGE);
             return;
         }
-        
-        // Check if the file exists
-        File bgImageFile = new File(bgImagePath);
-        if (!bgImageFile.exists() || !bgImageFile.isFile()) {
-            JOptionPane.showMessageDialog(mainFrame,
-                    "Background image file not found: " + bgImagePath,
-                    "File Not Found",
-                    JOptionPane.ERROR_MESSAGE);
-            return;
+
+        // Convert MM to pixels using the PIXELS_PER_MM constant
+        final int targetWidth = targetWidthMM * Constants.PIXELS_PER_MM;
+        final int targetHeight = targetHeightMM * Constants.PIXELS_PER_MM;
+
+        // Validate background image if that type is selected
+        final boolean useBackgroundImage = backgroundSettings
+                .getType() == BackgroundSettings.BackgroundType.CUSTOM_IMAGE;
+        final String originalBackgroundImagePath;
+        final BackgroundSettings.BackgroundType originalBackgroundType = backgroundSettings.getType();
+
+        // Initialize to null, then conditionally set if using background image
+        if (useBackgroundImage) {
+            String bgImagePath = backgroundSettings.getBackgroundImagePath();
+            if (bgImagePath == null || bgImagePath.isEmpty()) {
+                JOptionPane.showMessageDialog(mainFrame,
+                        "Please select a background image.",
+                        "Missing Background Image",
+                        JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            // Check if the file exists
+            File bgImageFile = new File(bgImagePath);
+            if (!bgImageFile.exists() || !bgImageFile.isFile()) {
+                JOptionPane.showMessageDialog(mainFrame,
+                        "Background image file not found: " + bgImagePath,
+                        "File Not Found",
+                        JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            // Store the original background image path
+            originalBackgroundImagePath = bgImagePath;
+        } else {
+            // Must initialize even when not used
+            originalBackgroundImagePath = null;
         }
-        
-        // Store the original background image path
-        originalBackgroundImagePath = bgImagePath;
-    } else {
-        // Must initialize even when not used
-        originalBackgroundImagePath = null;
+
+        // --- Process in Background ---
+        photoHistory.saveState(currentPhoto); // Save state before combined action
+        statusLabel.setText("Processing background and resizing...");
+
+        SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>() {
+            @Override
+            protected Void doInBackground() throws Exception {
+                try {
+                    // STEP 1: If using background image, first apply with solid color background
+                    if (useBackgroundImage) {
+                        // Temporarily change settings to use a solid color
+                        backgroundSettings.setType(BackgroundSettings.BackgroundType.SOLID_COLOR);
+
+                        // Process with solid white background first
+                        BackgroundRemover solidColorRemover = new BackgroundRemover(
+                                backgroundSettings,
+                                "model/modnet.onnx");
+                        solidColorRemover.process(currentPhoto);
+
+                        // Scale the result first
+                        ImageResizer resizer = new ImageResizer(
+                                targetWidth,
+                                targetHeight,
+                                true, // maintain aspect ratio
+                                backgroundSettings.getBackgroundColor());
+                        resizer.process(currentPhoto);
+
+                        // Now restore the settings to use the background image
+                        backgroundSettings.setType(BackgroundSettings.BackgroundType.CUSTOM_IMAGE);
+                        backgroundSettings.setBackgroundImagePath(originalBackgroundImagePath);
+
+                        // Apply the background image as a second pass
+                        BackgroundRemover imageRemover = new BackgroundRemover(
+                                backgroundSettings,
+                                "model/modnet.onnx");
+                        imageRemover.process(currentPhoto);
+                    } else {
+                        // Normal single-pass processing for solid color background
+                        BackgroundRemover remover = new BackgroundRemover(
+                                backgroundSettings,
+                                "model/modnet.onnx");
+                        remover.process(currentPhoto);
+
+                        // Scale the result
+                        ImageResizer resizer = new ImageResizer(
+                                targetWidth,
+                                targetHeight,
+                                true, // maintain aspect ratio
+                                backgroundSettings.getBackgroundColor());
+                        resizer.process(currentPhoto);
+                    }
+
+                    return null;
+                } catch (Exception ex) {
+                    // Make sure to restore original settings even if processing fails
+                    if (useBackgroundImage) {
+                        backgroundSettings.setType(originalBackgroundType);
+                        backgroundSettings.setBackgroundImagePath(originalBackgroundImagePath);
+                    }
+                    throw new Exception("Processing failed: " + ex.getMessage(), ex);
+                }
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    get(); // Check for exceptions
+                    updatePreview();
+                    updateUndoRedoButtons();
+                    layoutSourceFrame = currentPhoto.getProcessedFrame().clone();
+                    statusLabel.setText("Background processed and image resized successfully");
+
+                    // Make sure UI reflects correct settings if we've changed them
+                    if (useBackgroundImage) {
+                        solidColorRadio.setSelected(false);
+                        imageBackgroundRadio.setSelected(true);
+                        updateBackgroundControlsState();
+                    }
+                } catch (InterruptedException | ExecutionException ex) {
+                    JOptionPane.showMessageDialog(
+                            mainFrame,
+                            "Error during processing: " + ex.getCause().getMessage(),
+                            "Processing Error",
+                            JOptionPane.ERROR_MESSAGE);
+                    statusLabel.setText("Processing failed");
+                    updatePreview();
+                    updateUndoRedoButtons();
+                }
+            }
+        };
+
+        worker.execute();
     }
 
-    // --- Process in Background ---
-    photoHistory.saveState(currentPhoto); // Save state before combined action
-    statusLabel.setText("Processing background and resizing...");
-
-    SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>() {
-        @Override
-        protected Void doInBackground() throws Exception {
-            try {
-                // STEP 1: If using background image, first apply with solid color background
-                if (useBackgroundImage) {
-                    // Temporarily change settings to use a solid color
-                    backgroundSettings.setType(BackgroundSettings.BackgroundType.SOLID_COLOR);
-                    
-                    // Process with solid white background first
-                    BackgroundRemover solidColorRemover = new BackgroundRemover(
-                            backgroundSettings,
-                            "model/modnet.onnx"
-                    );
-                    solidColorRemover.process(currentPhoto);
-                    
-                    // Scale the result first
-                    ImageResizer resizer = new ImageResizer(
-                            targetWidth,
-                            targetHeight,
-                            true, // maintain aspect ratio
-                            backgroundSettings.getBackgroundColor()
-                    );
-                    resizer.process(currentPhoto);
-                    
-                    // Now restore the settings to use the background image
-                    backgroundSettings.setType(BackgroundSettings.BackgroundType.CUSTOM_IMAGE);
-                    backgroundSettings.setBackgroundImagePath(originalBackgroundImagePath);
-                    
-                    // Apply the background image as a second pass
-                    BackgroundRemover imageRemover = new BackgroundRemover(
-                            backgroundSettings,
-                            "model/modnet.onnx"
-                    );
-                    imageRemover.process(currentPhoto);
-                } else {
-                    // Normal single-pass processing for solid color background
-                    BackgroundRemover remover = new BackgroundRemover(
-                            backgroundSettings,
-                            "model/modnet.onnx"
-                    );
-                    remover.process(currentPhoto);
-                    
-                    // Scale the result
-                    ImageResizer resizer = new ImageResizer(
-                            targetWidth,
-                            targetHeight,
-                            true, // maintain aspect ratio
-                            backgroundSettings.getBackgroundColor()
-                    );
-                    resizer.process(currentPhoto);
-                }
-
-                return null;
-            } catch (Exception ex) {
-                // Make sure to restore original settings even if processing fails
-                if (useBackgroundImage) {
-                    backgroundSettings.setType(originalBackgroundType);
-                    backgroundSettings.setBackgroundImagePath(originalBackgroundImagePath);
-                }
-                throw new Exception("Processing failed: " + ex.getMessage(), ex);
-            }
-        }
-
-        @Override
-        protected void done() {
-            try {
-                get(); // Check for exceptions
-                updatePreview();
-                updateUndoRedoButtons();
-                layoutSourceFrame = currentPhoto.getProcessedFrame().clone();
-                statusLabel.setText("Background processed and image resized successfully");
-                
-                // Make sure UI reflects correct settings if we've changed them
-                if (useBackgroundImage) {
-                    solidColorRadio.setSelected(false);
-                    imageBackgroundRadio.setSelected(true);
-                    updateBackgroundControlsState();
-                }
-            } catch (InterruptedException | ExecutionException ex) {
-                JOptionPane.showMessageDialog(
-                        mainFrame,
-                        "Error during processing: " + ex.getCause().getMessage(),
-                        "Processing Error",
-                        JOptionPane.ERROR_MESSAGE
-                );
-                statusLabel.setText("Processing failed");
-                updatePreview();
-                updateUndoRedoButtons();
-            }
-        }
-    };
-
-    worker.execute();
-}
     private void generateLayoutSheet(String layoutOption) {
         statusLabel.setText("Generating layout sheet...");
 
@@ -1602,5 +1618,284 @@ private void handleProcessBackgroundAndResize(ActionEvent e) {
 
         // Start processing
         processor.process();
+    }
+
+    private JPanel createCloudExportPanel() {
+        JPanel panel = new JPanel();
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setBorder(BorderFactory.createTitledBorder("Cloud Export"));
+
+        // Load available cloud services
+        cloudServices = CloudServiceFactory.getInstance().getAvailableServices();
+
+        // Create service dropdown
+        JPanel servicePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        cloudServiceComboBox = new JComboBox<>();
+
+        for (CloudStorageService service : cloudServices) {
+            cloudServiceComboBox.addItem(service.getServiceName());
+        }
+
+        servicePanel.add(new JLabel("Cloud Service:"));
+        servicePanel.add(cloudServiceComboBox);
+        panel.add(servicePanel);
+
+        // Add authentication status
+        JPanel statusPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        authStatusLabel = new JLabel("Not authenticated");
+        authButton = new JButton("Authenticate");
+
+        // Update auth status when service is selected
+        cloudServiceComboBox.addActionListener(e -> {
+            updateCloudServiceAuthStatus();
+        });
+
+        // Handle authentication
+        authButton.addActionListener(e -> {
+            int selectedIndex = cloudServiceComboBox.getSelectedIndex();
+            if (selectedIndex >= 0 && selectedIndex < cloudServices.size()) {
+                CloudStorageService selectedService = cloudServices.get(selectedIndex);
+
+                if (selectedService instanceof GoogleDriveCloudStorageService) {
+                    showGoogleDriveAuthDialog((GoogleDriveCloudStorageService) selectedService);
+                } else {
+                    // Generic authentication approach
+                    if (selectedService.authenticate()) {
+                        updateCloudServiceAuthStatus();
+                    }
+                }
+            }
+        });
+
+        statusPanel.add(authStatusLabel);
+        statusPanel.add(authButton);
+        panel.add(statusPanel);
+
+        // Add export button
+        JButton exportButton = new JButton("Export to Cloud");
+        exportButton.addActionListener(this::handleCloudExport);
+        panel.add(exportButton);
+
+        return panel;
+    }
+
+    /**
+     * Update the authentication status display
+     */
+    private void updateCloudServiceAuthStatus() {
+        int selectedIndex = cloudServiceComboBox.getSelectedIndex();
+        if (selectedIndex >= 0 && selectedIndex < cloudServices.size()) {
+            CloudStorageService selectedService = cloudServices.get(selectedIndex);
+            boolean isAuth = selectedService.isAuthenticated();
+
+            authStatusLabel.setText(isAuth ? "Authenticated" : "Not authenticated");
+            authButton.setEnabled(!isAuth);
+        }
+    }
+
+    /**
+     * Show authentication dialog for Google Drive
+     */
+    private void showGoogleDriveAuthDialog(GoogleDriveCloudStorageService driveService) {
+        JDialog authDialog = new JDialog(mainFrame, "Google Drive Authentication", true);
+        authDialog.setLayout(new BorderLayout(10, 10));
+
+        JPanel panel = new JPanel();
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        // Information label
+        JLabel infoLabel = new JLabel("<html><body width='400px'>" +
+                "To use Google Drive, you need to provide a client secrets JSON file.<br><br>" +
+                "1. Go to the Google Cloud Console (console.cloud.google.com)<br>" +
+                "2. Create a project and enable the Google Drive API<br>" +
+                "3. Create OAuth 2.0 credentials (Desktop application type)<br>" +
+                "4. Download the client secrets JSON file<br><br>" +
+                "Select your client secrets file below:</body></html>");
+        panel.add(infoLabel);
+
+        // Add spacing
+        panel.add(Box.createRigidArea(new Dimension(0, 15)));
+
+        // File selection area
+        JPanel filePanel = new JPanel(new BorderLayout(5, 0));
+        JTextField filePathField = new JTextField();
+        filePathField.setEditable(false);
+
+        JButton browseButton = new JButton("Browse...");
+        browseButton.addActionListener(e -> {
+            JFileChooser fileChooser = new JFileChooser();
+            fileChooser.setDialogTitle("Select Google API Client Secrets");
+            fileChooser.setFileFilter(new FileNameExtensionFilter("JSON Files", "json"));
+
+            if (fileChooser.showOpenDialog(authDialog) == JFileChooser.APPROVE_OPTION) {
+                filePathField.setText(fileChooser.getSelectedFile().getAbsolutePath());
+            }
+        });
+
+        filePanel.add(new JLabel("Client Secrets JSON:"), BorderLayout.NORTH);
+        filePanel.add(filePathField, BorderLayout.CENTER);
+        filePanel.add(browseButton, BorderLayout.EAST);
+        panel.add(filePanel);
+
+        // Button panel
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JButton cancelButton = new JButton("Cancel");
+        JButton authenticateButton = new JButton("Authenticate");
+
+        cancelButton.addActionListener(e -> authDialog.dispose());
+
+        authenticateButton.addActionListener(e -> {
+            String filePath = filePathField.getText();
+            if (filePath.isEmpty()) {
+                JOptionPane.showMessageDialog(
+                        authDialog,
+                        "Please select a client secrets file.",
+                        "Missing File",
+                        JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+
+            // Show a warning about browser opening
+            JOptionPane.showMessageDialog(
+                    authDialog,
+                    "Your browser will open for Google authentication.\n" +
+                            "Please complete the authentication process in your browser.",
+                    "Browser Authentication",
+                    JOptionPane.INFORMATION_MESSAGE);
+
+            // Close the dialog
+            authDialog.dispose();
+
+            // Run authentication in background thread to not freeze UI
+            SwingWorker<Boolean, Void> authWorker = new SwingWorker<Boolean, Void>() {
+                @Override
+                protected Boolean doInBackground() throws Exception {
+                    return driveService.setCredentialsFile(filePath);
+                }
+
+                @Override
+                protected void done() {
+                    try {
+                        boolean success = get();
+                        if (success) {
+                            JOptionPane.showMessageDialog(
+                                    mainFrame,
+                                    "Successfully authenticated with Google Drive!",
+                                    "Authentication Successful",
+                                    JOptionPane.INFORMATION_MESSAGE);
+
+                            // Update UI components to reflect authenticated state
+                            updateCloudServiceAuthStatus();
+                        } else {
+                            JOptionPane.showMessageDialog(
+                                    mainFrame,
+                                    "Failed to authenticate with Google Drive.",
+                                    "Authentication Failed",
+                                    JOptionPane.ERROR_MESSAGE);
+                        }
+                    } catch (Exception ex) {
+                        JOptionPane.showMessageDialog(
+                                mainFrame,
+                                "Error during authentication: " + ex.getMessage(),
+                                "Authentication Error",
+                                JOptionPane.ERROR_MESSAGE);
+                    }
+                }
+            };
+
+            authWorker.execute();
+        });
+
+        buttonPanel.add(cancelButton);
+        buttonPanel.add(authenticateButton);
+
+        authDialog.add(panel, BorderLayout.CENTER);
+        authDialog.add(buttonPanel, BorderLayout.SOUTH);
+        authDialog.pack();
+        authDialog.setLocationRelativeTo(mainFrame);
+        authDialog.setVisible(true);
+    }
+
+    /**
+     * Handle the export to cloud button click
+     */
+    private void handleCloudExport(ActionEvent e) {
+        if (currentPhoto == null) {
+            JOptionPane.showMessageDialog(mainFrame, "No image loaded.", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        int selectedIndex = cloudServiceComboBox.getSelectedIndex();
+        if (selectedIndex < 0 || selectedIndex >= cloudServices.size()) {
+            JOptionPane.showMessageDialog(mainFrame, "Please select a cloud service.", "No Service Selected",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        CloudStorageService selectedService = cloudServices.get(selectedIndex);
+        if (!selectedService.isAuthenticated()) {
+            JOptionPane.showMessageDialog(mainFrame, "Authentication required.", "Not Authenticated",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        // Get filename
+        String suggestedName = exportSettings.getFileNamePrefix() + System.currentTimeMillis() + "."
+                + exportSettings.getFormat().getExtension();
+        String fileName = JOptionPane.showInputDialog(mainFrame, "Enter cloud file name:", suggestedName);
+
+        if (fileName == null || fileName.trim().isEmpty()) {
+            return; // User cancelled
+        }
+
+        // Show progress indicator
+        statusLabel.setText("Uploading to " + selectedService.getServiceName() + "...");
+
+        try {
+            ImageExporter exporter = new ImageExporter(exportSettings);
+            exporter.exportToCloud(currentPhoto, fileName, selectedService)
+                    .thenAccept(url -> {
+                        SwingUtilities.invokeLater(() -> {
+                            statusLabel.setText("Upload complete. URL: " + url);
+
+                            // Show success with copy link option
+                            int option = JOptionPane.showOptionDialog(
+                                    mainFrame,
+                                    "File uploaded successfully!\nURL: " + url,
+                                    "Upload Complete",
+                                    JOptionPane.OK_CANCEL_OPTION,
+                                    JOptionPane.INFORMATION_MESSAGE,
+                                    null,
+                                    new Object[] { "OK", "Copy Link" },
+                                    "OK");
+
+                            if (option == 1) {
+                                // Copy URL to clipboard
+                                StringSelection selection = new StringSelection(url);
+                                Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+                                clipboard.setContents(selection, null);
+                            }
+                        });
+                    })
+                    .exceptionally(ex -> {
+                        SwingUtilities.invokeLater(() -> {
+                            statusLabel.setText("Upload failed: " + ex.getMessage());
+                            JOptionPane.showMessageDialog(
+                                    mainFrame,
+                                    "Failed to upload file: " + ex.getMessage(),
+                                    "Upload Error",
+                                    JOptionPane.ERROR_MESSAGE);
+                        });
+                        return null;
+                    });
+        } catch (Exception ex) {
+            statusLabel.setText("Error preparing upload: " + ex.getMessage());
+            JOptionPane.showMessageDialog(
+                    mainFrame,
+                    "Error preparing upload: " + ex.getMessage(),
+                    "Upload Error",
+                    JOptionPane.ERROR_MESSAGE);
+        }
     }
 }
