@@ -54,7 +54,7 @@ Google Drive API for cloud based storage
 ## Setup Instructions
 
 ### Prerequisites
-- Java 8+
+- JDK 21
 - JavaCV / OpenCV
 - Google API credentials (for Drive integration)
 
