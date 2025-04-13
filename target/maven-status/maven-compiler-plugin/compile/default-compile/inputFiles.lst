@@ -1,26 +1,27 @@
-A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\config\ApplicationConfig.java
-A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\cloud\CloudStorageService.java
-A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\entities\BatchStatus.java
-A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\util\FileUtils.java
-A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\editor\EraserTool.java
-A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\util\ImageUtils.java
-A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\cloud\impl\GoogleDriveCloudStorageService.java
-A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\editor\BatchProcessor.java
-A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\editor\ImageExporter.java
-A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\editor\BackgroundRemover.java
-A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\main\Main.java
-A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\editor\ImageProcessor.java
-A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\editor\ONNXMattePredictor.java
-A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\util\Constants.java
-A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\editor\PhotoHistory.java
-A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\entities\BackgroundSettings.java
-A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\ui\MainApplication.java
-A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\editor\PhotoEnhancer.java
-A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\gui\GUI.java
-A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\editor\ImageResizer.java
-A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\entities\ExportSettings.java
-A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\entities\Photo.java
-A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\cloud\CloudServiceFactory.java
-A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\main\App.java
-A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\gui\BatchProcessingPanel.java
-A:\Kinoui\SMU\COURSE WORK\year 2 sem 2\OOP\proj\OOPs\src\main\java\com\editor\BackgroundEditor.java
+/Applications/MAMP/htdocs/OOPProject/src/main/java/com/gui/BatchProcessingPanel.java
+/Applications/MAMP/htdocs/OOPProject/src/main/java/com/editor/BackgroundEditor.java
+/Applications/MAMP/htdocs/OOPProject/src/main/java/com/util/FileUtils.java
+/Applications/MAMP/htdocs/OOPProject/src/main/java/com/util/Constants.java
+/Applications/MAMP/htdocs/OOPProject/src/main/java/com/gui/GUI.java
+/Applications/MAMP/htdocs/OOPProject/src/main/java/com/gui/EnhancementPanel.java
+/Applications/MAMP/htdocs/OOPProject/src/main/java/com/main/App.java
+/Applications/MAMP/htdocs/OOPProject/src/main/java/com/editor/EraserTool.java
+/Applications/MAMP/htdocs/OOPProject/src/main/java/com/editor/BatchProcessor.java
+/Applications/MAMP/htdocs/OOPProject/src/main/java/com/cloud/CloudStorageService.java
+/Applications/MAMP/htdocs/OOPProject/src/main/java/com/editor/InteractivePhotoEnhancer.java
+/Applications/MAMP/htdocs/OOPProject/src/main/java/com/editor/ONNXMattePredictor.java
+/Applications/MAMP/htdocs/OOPProject/src/main/java/com/cloud/impl/GoogleDriveCloudStorageService.java
+/Applications/MAMP/htdocs/OOPProject/src/main/java/com/main/Main.java
+/Applications/MAMP/htdocs/OOPProject/src/main/java/com/entities/BatchStatus.java
+/Applications/MAMP/htdocs/OOPProject/src/main/java/com/editor/ImageExporter.java
+/Applications/MAMP/htdocs/OOPProject/src/main/java/com/util/ImageUtils.java
+/Applications/MAMP/htdocs/OOPProject/src/main/java/com/ui/MainApplication.java
+/Applications/MAMP/htdocs/OOPProject/src/main/java/com/cloud/CloudServiceFactory.java
+/Applications/MAMP/htdocs/OOPProject/src/main/java/com/editor/ImageResizer.java
+/Applications/MAMP/htdocs/OOPProject/src/main/java/com/entities/BackgroundSettings.java
+/Applications/MAMP/htdocs/OOPProject/src/main/java/com/editor/ImageProcessor.java
+/Applications/MAMP/htdocs/OOPProject/src/main/java/com/entities/Photo.java
+/Applications/MAMP/htdocs/OOPProject/src/main/java/com/config/ApplicationConfig.java
+/Applications/MAMP/htdocs/OOPProject/src/main/java/com/editor/BackgroundRemover.java
+/Applications/MAMP/htdocs/OOPProject/src/main/java/com/editor/PhotoHistory.java
+/Applications/MAMP/htdocs/OOPProject/src/main/java/com/entities/ExportSettings.java
